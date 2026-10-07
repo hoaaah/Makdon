@@ -357,5 +357,58 @@ static class MarkdownSupport
 
         static long EncodedLength(long bytes, string mime) => $"data:{mime};base64,".Length + (bytes + 2) / 3 * 4;
     }
+
+    /// <summary>
+    /// Menyelesaikan tautan dokumen ke path file markdown lokal, atau null bila tidak boleh dibuka. Tidak melakukan I/O apa pun
+    /// (File.Exists dipanggil pemanggil hanya setelah path lolos di sini), sehingga tautan UNC tidak memicu koneksi SMB/NTLM.
+    /// Urutan: skema <c>file:</c> tanpa host dikonversi lewat <c>LocalPath</c> (berhost ditolak), tautan relatif didekode lalu digabung
+    /// dengan <paramref name="baseDir"/>; path perangkat (<c>\\?\</c>, <c>\\.\</c>) ditolak; ekstensi harus markdown; terakhir
+    /// <see cref="IsAllowedLocalPath"/> (UNC hanya di share yang sama dengan dokumen). <paramref name="anchor"/> berisi bagian setelah '#'.
+    /// </summary>
+    public static string? ResolveLinkTarget(string? baseDir, string? url, out string? anchor)
+    {
+        anchor = null;
+        if (string.IsNullOrWhiteSpace(url) || url.StartsWith('#')) return null;
+
+        var parts = url.Split('#', 2);
+        var pathPart = parts[0];
+        var fragment = parts.Length > 1 ? parts[1] : null;
+
+        try
+        {
+            string combined;
+            if (Uri.TryCreate(pathPart, UriKind.Absolute, out var absolute) && absolute.Scheme != Uri.UriSchemeFile) return null;
+
+            if (absolute is not null && pathPart.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                if (absolute.IsUnc || !string.IsNullOrEmpty(absolute.Host)) return null;
+                combined = absolute.LocalPath;
+            }
+            else
+            {
+                // Path relatif, ter-percent-encode, atau path mentah ("C:\x.md", "\\host\share\x.md"; yang rooted menimpa baseDir).
+                if (baseDir is null && !Path.IsPathRooted(pathPart)) return null;
+                combined = Path.Combine(baseDir ?? "", Uri.UnescapeDataString(pathPart));
+            }
+
+            if (IsDevicePath(combined)) return null;
+            var full = Path.GetFullPath(combined);
+            if (IsDevicePath(full) || !MarkdownFiles.IsMarkdown(full) || !IsAllowedLocalPath(full, baseDir)) return null;
+
+            anchor = fragment;
+            return full;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or UriFormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Awalan path perangkat/extended-length Win32 (<c>\\?\</c>, <c>\\.\</c>, juga dengan '/'), yang melewati normalisasi path.</summary>
+    static bool IsDevicePath(string path) =>
+        path.Length >= 4
+        && path[0] is '\\' or '/' && path[1] is '\\' or '/'
+        && path[2] is '?' or '.'
+        && path[3] is '\\' or '/';
 }
 

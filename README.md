@@ -9,7 +9,9 @@ Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit
 - Sorotan sintaks Markdown, tema Terang/Gelap/Ikuti Sistem, zoom (Ctrl+roda mouse).
 - Cari dan ganti (teks biasa atau regex) dengan penanda hasil, Ganti Semua sebagai satu langkah Undo.
 - Toolbar/pintasan format: tebal, miring, kode inline, heading, daftar, kutipan, tautan, gambar.
-- Tautan relatif ke file Markdown lain dan `#anchor` heading (slug gaya GitHub) bekerja di pratinjau.
+- Tautan relatif ke file Markdown lain dan `#anchor` heading (slug gaya GitHub) bekerja di pratinjau. Berkas yang diterima
+  seret-lepas dan tautan relatif: `.md`, `.markdown`, `.mdown`, `.mkd`, dan `.txt` (asosiasi file hanya mendaftarkan
+  `.md` dan `.markdown`). Tautan ke UNC (`\\host\...`) dan berkas non-Markdown tidak dibuka.
 - Encoding dipertahankan saat menyimpan: UTF-8 (dengan/tanpa BOM), UTF-16, UTF-32, Windows-1252.
   File berisi byte tidak valid ditandai dan meminta konfirmasi sebelum disimpan.
 - Penyimpanan atomik (file sementara lalu ganti). Bila file sudah diubah program lain sejak dibuka, simpan tidak
@@ -39,6 +41,11 @@ Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit
   remote. Gambar ke share UNC (`\\host\...`, `file://host/...`) dan skema lain (`ftp:`, dll.) selalu diblokir tanpa
   koneksi jaringan apa pun. Gambar `data:` tidak ditampilkan di pratinjau (diganti penanda) karena WPF tidak
   mendukungnya, tetapi tetap disertakan di ekspor HTML bila tipenya sah (png/jpeg/gif/webp).
+
+## Dokumentasi
+
+Dokumentasi pengembangan (arsitektur, keputusan desain, kontribusi, keamanan, pengujian) ada di [docs/](docs/README.md).
+Riwayat perubahan: [CHANGELOG.md](CHANGELOG.md).
 
 ## Pintasan keyboard
 
@@ -98,7 +105,7 @@ dan angka (mis. `.md`).
 | Data | Lokasi |
 | --- | --- |
 | Pengaturan (tema, zoom, berkas terakhir, sesi, blokir gambar remote) | `%APPDATA%\MdViewer\settings.json` |
-| Catatan galat | `%LOCALAPPDATA%\MdViewer\crash.log` (dipangkas otomatis di atas 512 KB) |
+| Catatan galat | `%LOCALAPPDATA%\MdViewer\crash.log` (bila lebih dari 512 KB, seluruh file dihapus lalu entri baru ditulis) |
 
 Settings yang rusak atau hilang diabaikan (kembali ke bawaan). Saat keluar, daftar berkas terakhir digabung dengan isi
 file di disk supaya beberapa instance tidak saling menimpa.
@@ -113,7 +120,8 @@ saat keluar menyimpan sesinya seperti instance tanpa argumen.
 - Hanya Windows (WPF). Pratinjau memakai Markdig.Wpf: HTML mentah di dokumen diabaikan di pratinjau, dan sebagian
   ekstensi Markdown mungkin tampil lebih sederhana daripada di ekspor HTML.
 - File di atas 50 MB ditanyakan dulu sebelum dibuka; di atas 500 MB ditolak. Seluruh file dibaca ke memori.
-  Dokumen di atas 1 MB: pratinjau dan statistik kata/karakter diperbarui lebih jarang.
+  Ambang berdasarkan jumlah karakter, bertingkat: mulai 100 rb karakter pratinjau diurai di thread latar; mulai 200 rb
+  jeda pembaruan pratinjau bertambah; mulai 1 juta jeda makin panjang dan statistik kata/karakter diperbarui lebih jarang.
 - Deteksi perubahan file dari luar memakai FileSystemWatcher dan pemeriksaan saat jendela aktif kembali. File yang tidak
   berubah ukuran dan waktu tulisnya (dan sudah lebih dari 2 detik) tidak dibaca ulang. Share jaringan yang tidak
   mendukung watcher hanya terdeteksi saat jendela diaktifkan.

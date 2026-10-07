@@ -1,6 +1,6 @@
 # MdViewer
 
-Aplikasi WPF .NET 9 (Windows) untuk menyunting dan melihat pratinjau Markdown. Lihat `README.md` untuk fitur dan pemakaian.
+Aplikasi WPF .NET 9 (Windows) untuk menyunting dan melihat pratinjau Markdown. Lihat `README.md` untuk fitur dan pemakaian, dan `docs/README.md` untuk dokumentasi pengembangan (arsitektur, keputusan desain, keamanan, pengujian).
 
 ## Perintah
 
@@ -48,6 +48,6 @@ dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:Publ
 - Sesi: instance yang dimulai dengan argumen tidak menimpa sesi tersimpan sampai pengguna membuka tab lagi (kiriman instance lain, dialog
   Buka, seret-lepas, Berkas Terakhir) - lewat `OpenUserFile`; sesudahnya sesi disimpan seperti biasa.
 - Galat I/O yang bisa dipulihkan ditangkap dan ditampilkan ke pengguna; galat tak terduga dicatat `CrashLog` (`%LOCALAPPDATA%\MdViewer\crash.log`).
-- Test tidak boleh menyentuh `%APPDATA%`/registri/crash.log pengguna (log sudah dialihkan di `TestLogRedirect`); `SingleInstance.Create(scope)`
+- Test tidak boleh menyentuh/menulis `%APPDATA%`, `%LOCALAPPDATA%`, dan registri (membaca HKCU Personalize untuk tema diperbolehkan); crash.log pengguna tidak boleh tersentuh (log sudah dialihkan di `TestLogRedirect`); `SingleInstance.Create(scope)`
   memakai scope unik di test. Jangan menjalankan skrip registri sungguhan.
 - Jangan commit atau push kecuali diminta.

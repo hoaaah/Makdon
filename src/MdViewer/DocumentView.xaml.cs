@@ -675,19 +675,10 @@ public partial class DocumentView : System.Windows.Controls.UserControl, IDispos
             return;
         }
 
+        // Resolusi path murni (tanpa I/O): ekstensi dan lokasi (UNC ditolak) dicek sebelum File.Exists, supaya tautan
+        // ter-percent-encode ke \\host\share tidak memicu koneksi SMB/NTLM.
         var baseDir = tab.FilePath is null ? null : Path.GetDirectoryName(tab.FilePath);
-        if (baseDir is null) return;
-
-        var parts = url.Split('#', 2);
-        var anchor = parts.Length > 1 ? parts[1] : null;
-
-        try
-        {
-            var target = Path.GetFullPath(Path.Combine(baseDir, Uri.UnescapeDataString(parts[0])));
-            if (File.Exists(target) && MarkdownFiles.IsMarkdown(target)) tab.RequestOpen(target, anchor);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-        }
+        var target = MarkdownSupport.ResolveLinkTarget(baseDir, url, out var anchor);
+        if (target is not null && File.Exists(target)) tab.RequestOpen(target, anchor);
     }
 }
