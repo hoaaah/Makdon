@@ -1,17 +1,17 @@
-# Pengujian MdViewer
+# Pengujian Makdon
 
 **Tujuan:** peta test (berkas -> area), cara menjalankan, model thread test WPF, daftar hal yang **tidak** teruji, dan checklist uji
 manual sebelum rilis.
 **Pembaca:** pengembang yang menjalankan/menulis test dan orang yang menyiapkan rilis. Cara menulis test baru (pola dan aturan):
 [CONTRIBUTING.md](CONTRIBUTING.md#4-cara-menulis-test).
 
-Catatan kejujuran: dokumen ini disusun dengan membaca kode. Run terakhir (2026-10-08, `dotnet test src/MdViewer.Tests`): 1455 kasus
+Catatan kejujuran: dokumen ini disusun dengan membaca kode. Run terakhir (2026-10-08, `dotnet test src/Makdon.Tests`): 1455 kasus
 lulus, 0 gagal, 0 dilewati (durasi sekitar 55 dtk; sebelum fitur Pratinjau Cetak: 1168 kasus, sekitar 22 dtk). Jumlah test di tabel = jumlah atribut `[Fact]`/`[Theory]` per berkas (hasil `grep`), bukan jumlah
 kasus yang dieksekusi; satu `[Theory]` bisa menjadi banyak kasus. Total 800 atribut di 24 berkas.
 
 ## Peta test: berkas -> area
 
-Proyek `src/MdViewer.Tests` (xUnit 2.9.2, `net9.0-windows`). `[W]` = kelas bertanda `[Collection("Wpf")]` (berjalan lewat `WpfHost`).
+Proyek `src/Makdon.Tests` (xUnit 2.9.2, `net9.0-windows`). `[W]` = kelas bertanda `[Collection("Wpf")]` (berjalan lewat `WpfHost`).
 
 | Berkas | Atribut | Kelas (area) |
 | --- | --- | --- |
@@ -48,20 +48,20 @@ Peta area -> berkas untuk keamanan dan keputusan ada di [SECURITY.md](SECURITY.m
 Dari akar repo (PowerShell):
 
 ```powershell
-dotnet test src/MdViewer.Tests                                          # semua test
-dotnet test src/MdViewer.Tests --filter "FullyQualifiedName~DocumentTabTests"   # satu kelas
-dotnet test src/MdViewer.Tests --filter "FullyQualifiedName~SingleInstance"     # semua kelas yang namanya memuat teks itu
-dotnet test src/MdViewer.Tests --filter "DisplayName~IsRecoverable"             # berdasarkan nama test
-dotnet test src/MdViewer.Tests --logger "console;verbosity=detailed"             # keluaran rinci per test
-dotnet test src/MdViewer.Tests --blame-hang-timeout 2min                         # batalkan + laporkan test yang menggantung
-dotnet test MdViewer.sln                                                         # lewat solution
+dotnet test src/Makdon.Tests                                            # semua test
+dotnet test src/Makdon.Tests --filter "FullyQualifiedName~DocumentTabTests"     # satu kelas
+dotnet test src/Makdon.Tests --filter "FullyQualifiedName~SingleInstance"       # semua kelas yang namanya memuat teks itu
+dotnet test src/Makdon.Tests --filter "DisplayName~IsRecoverable"               # berdasarkan nama test
+dotnet test src/Makdon.Tests --logger "console;verbosity=detailed"               # keluaran rinci per test
+dotnet test src/Makdon.Tests --blame-hang-timeout 2min                           # batalkan + laporkan test yang menggantung
+dotnet test Makdon.sln                                                           # lewat solution
 ```
 
 - `--blame-hang-timeout` berguna di sini karena test WPF memompa dispatcher (`ChoiceDialog` modal, `Dispatcher.Invoke`): satu dialog yang
   tidak tertutup atau `Invoke` yang menunggu selamanya akan menggantungkan seluruh proses test. `WpfHost` sendiri menyerah bila thread
   STA tidak siap dalam 60 dtk (`Support/WpfHost.cs:57`). Nilai `2min` hanya contoh.
 - Tidak ada `Trait`/kategori; penyaringan lewat nama kelas/test. Kelas dengan banyak test lambat bukan terkelompok khusus.
-- Sebelum PR: `dotnet build MdViewer.sln` (harus 0 warning) lalu `dotnet test src/MdViewer.Tests` (semua hijau) - aturan CLAUDE.md.
+- Sebelum PR: `dotnet build Makdon.sln` (harus 0 warning) lalu `dotnet test src/Makdon.Tests` (semua hijau) - aturan CLAUDE.md.
 - Test tertentu memerlukan waktu nyata: klien pipe macet menunggu batas baca 5 dtk (`Server_StalledClient_IsDroppedAfterTheReadTimeout_*`),
   pola katastrofik menunggu batas regex 2-4 dtk (`TimedOutPattern_*`, `TryFindAll_CatastrophicRegex_*`), render dokumen besar
   menunggu sampai 20 dtk bila lambat (`UiPump.Until`). Test pratinjau cetak menunggu dengan batas `PrintTestKit.Patience` (15 dtk),
@@ -70,7 +70,7 @@ dotnet test MdViewer.sln                                                        
 ## Thread STA dan `WpfHost`
 
 - WPF mensyaratkan thread STA dan `Application` adalah singleton per proses. `WpfHost.Instance` (`Support/WpfHost.cs`) membuat **satu**
-  thread STA latar (`IsBackground = true`, nama `MdViewer.Tests STA`), membuat satu `App` (`ShutdownMode.OnExplicitShutdown`, memanggil
+  thread STA latar (`IsBackground = true`, nama `Makdon.Tests STA`), membuat satu `App` (`ShutdownMode.OnExplicitShutdown`, memanggil
   `InitializeComponent()` sehingga resource tema/kontrol dimuat, **tanpa** `OnStartup`: tidak ada single-instance, tidak ada
   `MainWindow`), lalu `Dispatcher.Run()`.
 - Semua test yang menyentuh WPF memanggil `WpfHost.Instance.Run(() => ...)` dan kelasnya `[Collection("Wpf")]`. `Run` bukan sekadar
@@ -87,7 +87,7 @@ dotnet test MdViewer.sln                                                        
 - Koleksi `Wpf` bertanda `DisableParallelization = true` (`MarkdownEditingTests.cs:942`); kelas lain (tanpa WPF) dapat berjalan paralel
   satu sama lain, jadi tidak boleh berbagi state statis. State statis yang disentuh test dan harus dipulihkan: `DocumentView.BlockRemoteImages`,
   `ThemeManager` (mode/kamus), `CrashLog.LogPath`, `CultureInfo.CurrentCulture`.
-- `TestLogRedirect` (`[ModuleInitializer]`) mengalihkan `CrashLog.LogPath` ke `%TEMP%\MdViewer.Tests\crash-<pid>.log` saat assembly test dimuat.
+- `TestLogRedirect` (`[ModuleInitializer]`) mengalihkan `CrashLog.LogPath` ke `%TEMP%\Makdon.Tests\crash-<pid>.log` saat assembly test dimuat.
 - **Pencatat galat dispatcher** (`Support/WpfHost.cs`). `OnStartup` `App` tidak berjalan di test, jadi `WpfHost` memasang sendiri
   `DispatcherUnhandledException` yang memasukkan galat ke `DispatcherErrors.Queue` (`WpfHost.Unhandled`) dan menandainya `Handled` (proses
   test tidak mati, seperti galat yang dipulihkan di aplikasi). Atribut tingkat assembly `[assembly: FailOnUnexpectedDispatcherErrors]`
@@ -100,14 +100,14 @@ dotnet test MdViewer.sln                                                        
     (selain pemeriksa otomatis di atas, supaya pesan kegagalannya langsung menunjuk test itu).
   - Perilaku WPF saat galat pecah di dalam frame `UiPump` tidak tetap (kadang frame ditinggalkan, kadang pompa selesai normal);
     `WpfHostErrorTrackingTests.AnErrorThrownWhilePumpingInsideRun_*` hanya menjamin: kembali (tidak menggantung), galat tercatat, host tetap bisa dipakai.
-- `TempDir`: folder unik `%TEMP%\MdViewer.Tests\<guid>`; kelas test yang membuat tab memanggil `GC.Collect()` +
+- `TempDir`: folder unik `%TEMP%\Makdon.Tests\<guid>`; kelas test yang membuat tab memanggil `GC.Collect()` +
   `WaitForPendingFinalizers()` sebelum menghapusnya karena `BitmapImage` menahan handle file gambar sampai di-GC.
 - Test mengakses field privat lewat refleksi (`UiPump.IsTimerEnabled`: `statsTimer`, `renderTimer`, `queryTimer`, `refreshTimer`) dan
   elemen XAML via `FindName`/field internal; mengganti nama keduanya memerlukan pembaruan test.
 
 ## Yang tidak teruji
 
-Diperiksa dengan `grep` terhadap `src/MdViewer.Tests`; "tidak teruji" berarti tidak ada test yang menjalankan kodenya.
+Diperiksa dengan `grep` terhadap `src/Makdon.Tests`; "tidak teruji" berarti tidak ada test yang menjalankan kodenya.
 
 | Area | Keterangan |
 | --- | --- |
@@ -130,17 +130,17 @@ Diperiksa dengan `grep` terhadap `src/MdViewer.Tests`; "tidak teruji" berarti ti
 
 ## Checklist uji manual sebelum rilis
 
-Jalankan pada build **publish** (`dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true`,
-hasil di `src\MdViewer\bin\Release\net9.0-windows\win-x64\publish\MdViewer.exe`), idealnya di mesin/akun uji dengan .NET 9 Desktop Runtime.
+Jalankan pada build **publish** (`dotnet publish src/Makdon -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true`,
+hasil di `src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe`), idealnya di mesin/akun uji dengan .NET 9 Desktop Runtime.
 Centang tiap butir; catat versi Windows dan DPI.
 
 **Build dan paket**
-- [ ] `dotnet build MdViewer.sln` 0 warning, 0 error; `dotnet test src/MdViewer.Tests` hijau (dan periksa test symlink berjalan, bukan lulus kosong, mis. dengan Developer Mode aktif).
-- [ ] `MdViewer.exe` hasil publish berjalan tanpa folder lain; ikon dan judul jendela benar; versi sesuai ([../CHANGELOG.md](../CHANGELOG.md)).
+- [ ] `dotnet build Makdon.sln` 0 warning, 0 error; `dotnet test src/Makdon.Tests` hijau (dan periksa test symlink berjalan, bukan lulus kosong, mis. dengan Developer Mode aktif).
+- [ ] `Makdon.exe` hasil publish berjalan tanpa folder lain; ikon dan judul jendela benar; versi sesuai ([../CHANGELOG.md](../CHANGELOG.md)).
 
 **Startup dan single-instance**
 - [ ] Tanpa argumen: keadaan kosong tampil; tanpa argumen + sesi tersimpan: tab, mode, dan posisi caret dipulihkan.
-- [ ] `MdViewer.exe file.md` membuka tab; path relatif pada argumen terbuka benar.
+- [ ] `Makdon.exe file.md` membuka tab; path relatif pada argumen terbuka benar.
 - [ ] Saat berjalan, peluncuran kedua dengan file membuka tab di jendela yang ada dan membawanya ke depan (juga dari keadaan minimize); tanpa argumen hanya mengaktifkan jendela.
 - [ ] Setelah instance utama ditutup, peluncuran berikutnya menjadi instance utama baru. (Opsional) sesi Windows lain punya instance sendiri.
 
@@ -189,10 +189,10 @@ Centang tiap butir; catat versi Windows dan DPI.
 - [ ] Buka beberapa tab, tutup, buka lagi: sesi pulih. Buka lewat argumen file lalu tutup: sesi tersimpan sebelumnya **tidak** tertimpa; buka tab lagi di instance itu (dialog Buka/seret-lepas/Berkas Terakhir) lalu tutup: sesinya tersimpan.
 - [ ] Berkas Terakhir (maks 10); entri yang file-nya hilang menampilkan pesan dan dihapus.
 - [ ] `settings.json` dirusak manual: aplikasi tetap terbuka dengan bawaan.
-- [ ] Setelah galat yang dipulihkan (mis. gambar rusak), `%LOCALAPPDATA%\MdViewer\crash.log` terisi; galat fatal: tidak ada cara memicu dari rilis (belum diverifikasi manual; gunakan build debug bila perlu).
+- [ ] Setelah galat yang dipulihkan (mis. gambar rusak), `%LOCALAPPDATA%\Makdon\crash.log` terisi; galat fatal: tidak ada cara memicu dari rilis (belum diverifikasi manual; gunakan build debug bila perlu).
 
 **Skrip asosiasi file (di akun/VM uji)**
-- [ ] `scripts\register-file-association.ps1 -WhatIf` tidak mengubah apa pun; tanpa `-WhatIf` mendaftar di HKCU; "Buka dengan" menampilkan MdViewer; `unregister-file-association.ps1` membersihkan (dan memulihkan nilai bawaan bila `-SetDefault` dipakai).
+- [ ] `scripts\register-file-association.ps1 -WhatIf` tidak mengubah apa pun; tanpa `-WhatIf` mendaftar di HKCU; "Buka dengan" menampilkan Makdon; `unregister-file-association.ps1` membersihkan (dan memulihkan nilai bawaan bila `-SetDefault` dipakai).
 
 **Aksesibilitas ringan**
 - [ ] Navigasi keyboard (Tab/Ctrl+Tab), fokus terlihat, nama kontrol terbaca pembaca layar (properti `AutomationProperties.Name` ada di XAML; kualitasnya belum diverifikasi).

@@ -1,4 +1,4 @@
-# Dokumentasi pengembangan MdViewer
+# Dokumentasi pengembangan Makdon
 
 **Tujuan:** indeks dokumentasi pengembangan. **Pembaca:** pengembang, reviewer, dan agen AI yang bekerja di repo ini.
 Dokumentasi pengguna (fitur, pintasan, build singkat) ada di [../README.md](../README.md); aturan kerja proyek di
@@ -25,13 +25,13 @@ Dokumentasi pengguna (fitur, pintasan, build singkat) ada di [../README.md](../R
 Ketidaksesuaian yang dicatat saat dokumentasi ini disusun telah diperbaiki; tidak ada yang tersisa. Perincian per butir ada di
 [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) dan [SECURITY.md](SECURITY.md).
 
-- README (Lokasi data): `crash.log` kini ditulis "seluruh file dihapus bila > 512 KB, lalu entri baru ditulis" (`src/MdViewer/CrashLog.cs:38`).
+- README (Lokasi data): `crash.log` kini ditulis "seluruh file dihapus bila > 512 KB, lalu entri baru ditulis" (`src/Makdon/CrashLog.cs:38`).
 - README (Batasan): "di atas 1 MB" diganti ambang karakter bertingkat (100 rb: parse latar; 200 rb: jeda render naik; 1 juta: jeda dan
-  statistik lebih jarang) - `src/MdViewer/DocumentView.xaml.cs:22-29`.
+  statistik lebih jarang) - `src/Makdon/DocumentView.xaml.cs:22-29`.
 - CLAUDE.md: aturan test kini "tidak boleh menyentuh/menulis `%APPDATA%`, `%LOCALAPPDATA%`, dan registri (membaca HKCU Personalize untuk
   tema diperbolehkan)". Empat test membaca nilai itu lewat `ThemeManager.SystemUsesLightTheme()` (satu test langsung, tiga test
   `ThemeManagerApplyTests` lewat `Apply`); tidak ada yang menulis. Lihat [CONTRIBUTING.md](CONTRIBUTING.md#42-aturan).
-- `MdViewer.csproj` `<Version>` diubah dari `1.0.0` menjadi `0.1.0` agar cocok dengan CHANGELOG.
+- `Makdon.csproj` `<Version>` diubah dari `1.0.0` menjadi `0.1.0` agar cocok dengan CHANGELOG.
 - README menyatakan bahwa `.txt` (dan `.mdown`, `.mkd`) juga diterima seret-lepas dan tautan relatif (`MarkdownFiles.IsMarkdown`),
   sedangkan asosiasi file hanya `.md`/`.markdown`.
 

@@ -1,6 +1,6 @@
-# Keamanan MdViewer: model ancaman dan kontrol
+# Keamanan Makdon: model ancaman dan kontrol
 
-**Tujuan:** merinci apa yang dilindungi MdViewer, dari siapa, dengan kontrol apa (lokasi kode dan test yang menjaganya), serta
+**Tujuan:** merinci apa yang dilindungi Makdon, dari siapa, dengan kontrol apa (lokasi kode dan test yang menjaganya), serta
 batasan yang masih ada.
 **Pembaca:** pengembang dan reviewer keamanan. Keputusan terkait: [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) (ADR-06, 07, 08, 10, 11,
 17, 18, 24, 25). Peta test: [TESTING.md](TESTING.md).
@@ -23,12 +23,12 @@ kerentanan (tidak ada `SECURITY.md` di akar atau `.github/`); laporkan ke pemili
 | --- | --- |
 | Penulis dokumen `.md` tak tepercaya | Mengontrol isi file yang dibuka pengguna (teks, HTML mentah, URL tautan/gambar, ukuran) |
 | Penerima HTML hasil ekspor | Membuka berkas ekspor di peramban |
-| Proses lain milik pengguna yang sama | Dapat mengubah file di disk, menulis ke pipe single-instance, menjalankan MdViewer lagi |
+| Proses lain milik pengguna yang sama | Dapat mengubah file di disk, menulis ke pipe single-instance, menjalankan Makdon lagi |
 | Pengguna Windows lain di mesin yang sama | Tidak boleh bisa mengirim perintah ke instance pengguna ini |
 | Pengguna sendiri | Dipercaya (mis. menekan "Muat gambar remote", mengetik regex sendiri) |
 
 Batas kepercayaan: **isi dokumen** dan **file di disk yang berubah dari luar** tidak tepercaya; kode aplikasi, `settings.json` milik
-pengguna (tetapi tetap divalidasi), dan input yang diketik pengguna dipercaya. MdViewer tidak mengeksekusi isi dokumen (tidak ada
+pengguna (tetapi tetap divalidasi), dan input yang diketik pengguna dipercaya. Makdon tidak mengeksekusi isi dokumen (tidak ada
 skrip, makro, atau plugin).
 
 ## 2. Kontrol per ancaman
@@ -112,7 +112,7 @@ Nomor baris test di tabel ini: `SingleInstanceServerTests.cs`, kecuali ditulis l
 | Pengguna/sesi lain mengirim perintah | Pipe `PipeOptions.CurrentUserOnly` di server dan klien; nama pipe memuat SID pengguna + id sesi; mutex `Local\` per sesi | `SingleInstance.cs:47, 61-62, 104-105, 189` | `PipeName_ContainsTheWindowsSessionId_*` (`SingleInstanceServerTests.cs:245`); **penolakan pengguna lain tidak diuji** (butuh akun kedua) |
 | Pesan berisi path relatif/aneh | Hanya `Path.IsPathFullyQualified` (drive atau UNC); `C:rel.md` dan `\rel.md` ditolak | `SingleInstance.cs:163-172` | `ParseMessage_RejectsRootedButNotFullyQualifiedPaths` (`:106`), `Server_ForwardsOnlyAbsolutePaths_AndNoMoreThanSixtyFour` (`:124`), `Message_RoundTrips_AndOnlyAbsolutePathsAreAccepted` (`HardeningTests.cs:798`) |
 | Banjir path | Maksimal 64 path, tiap path < 32768 karakter, pesan dipotong di 256 K karakter | `SingleInstance.cs:17-19, 154, 169-170` | `ParseMessage_CapsAtSixtyFourFiles_*` (`:45`), `ParseMessage_SkipsBlankLinesAndOverlongPaths` (`:87`), `Server_OversizedMessage_DoesNotKillTheServer_*` (`:183`) |
-| Pesan palsu/header salah | Header harus persis `MDVIEWER1` (peka huruf, tanpa spasi); sisanya dibuang | `SingleInstance.cs:166` | `ParseMessage_HeaderMustMatchExactly` (`:73`), `Server_IgnoresMessagesWithWrongHeader_*` (`:167`) |
+| Pesan palsu/header salah | Header harus persis `MAKDON1` (peka huruf, tanpa spasi); sisanya dibuang | `SingleInstance.cs:166` | `ParseMessage_HeaderMustMatchExactly` (`:73`), `Server_IgnoresMessagesWithWrongHeader_*` (`:167`) |
 | Injeksi path lewat baris baru | `BuildMessage` membuang entri berisi `\n`/`\r` | `SingleInstance.cs:174-175` | `BuildMessage_DropsEntriesContainingLineBreaks_*` (`:114`) |
 | Klien macet menahan server (DoS) | Batas baca 5 dtk per klien; klien macet tidak dihitung sebagai kegagalan server | `SingleInstance.cs:35, 95-122` | `Server_StalledClient_IsDroppedAfterTheReadTimeout_*` (`:209`), `Server_SurvivesMoreStalledClientsThanTheFailureLimit` (`:258`) |
 | Callback melempar mematikan server | `Deliver` menangkap dan mencatat (kecuali OOM) | `SingleInstance.cs:136-143` | `Server_CallbackThatThrows_IsLoggedAndTheServerKeepsServing` (`:280`) |
@@ -122,9 +122,9 @@ Nomor baris test di tabel ini: `SingleInstanceServerTests.cs`, kecuali ditulis l
 
 | Ancaman | Kontrol | Lokasi kode | Test |
 | --- | --- | --- | --- |
-| Skrip merusak registri sistem / butuh admin | Hanya `Registry.CurrentUser` (HKCU); `SupportsShouldProcess` (`-WhatIf` mencetak tanpa menulis) | `scripts/register-file-association.ps1:37, 77, 81`; `unregister-file-association.ps1:18, 37, 52` | - (CLAUDE.md melarang menjalankan skrip registri sungguhan di test) |
-| Injeksi nama subkey lewat `-Extensions` | `-Extensions` dinormalkan ke huruf kecil, lalu divalidasi `'^\.[a-z0-9]+$'` (`-cnotmatch`) | `register-file-association.ps1:68-70`, `unregister-file-association.ps1:31-33` | - |
-| Nilai bawaan pengguna hilang | `-SetDefault` mencadangkan ke `HKCU\Software\MdViewer\PreviousDefault`; unregister memulihkan dan hanya menyentuh nilai yang persis menunjuk ProgID MdViewer; `UserChoice` tidak disentuh | `register-file-association.ps1:102-120`, `unregister-file-association.ps1:52-102` | - |
+| Skrip merusak registri sistem / butuh admin | Hanya `Registry.CurrentUser` (HKCU); `SupportsShouldProcess` (`-WhatIf` mencetak tanpa menulis) | `scripts/register-file-association.ps1:37, 77, 81`; `unregister-file-association.ps1:20, 42, 102` | - (CLAUDE.md melarang menjalankan skrip registri sungguhan di test) |
+| Injeksi nama subkey lewat `-Extensions` | `-Extensions` dinormalkan ke huruf kecil, lalu divalidasi `'^\.[a-z0-9]+$'` (`-cnotmatch`) | `register-file-association.ps1:68-70`, `unregister-file-association.ps1:36-38` | - |
+| Nilai bawaan pengguna hilang | `-SetDefault` mencadangkan ke `HKCU\Software\Makdon\PreviousDefault`; unregister memulihkan dan hanya menyentuh nilai yang persis menunjuk ProgID Makdon; `UserChoice` tidak disentuh | `register-file-association.ps1:102-120`, `unregister-file-association.ps1:57-114` | - |
 | Eksekusi: `powershell -ExecutionPolicy Bypass` di README | Hanya untuk skrip repo; periksa isi skrip dan jalankan `-WhatIf` dulu | README, bagian Asosiasi file | - |
 
 Aplikasi sendiri hanya **membaca** registri: `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`
@@ -135,7 +135,7 @@ Aplikasi sendiri hanya **membaca** registri: `HKCU\Software\Microsoft\Windows\Cu
 | Hal | Fakta | Lokasi kode | Test |
 | --- | --- | --- | --- |
 | Apa yang dicatat | Stempel waktu (`InvariantCulture`), string konteks yang ditulis pemanggil, dan `exception.ToString()` (tipe, pesan, stack trace, inner exception). Pesan galat .NET sering memuat path file. Beberapa konteks memuat URL/path secara eksplisit: `"Gambar tidak dapat ditampilkan: {image.Url}"`, `"Gagal membuka tautan: {uri}"`. Kegagalan Pratinjau Cetak juga dicatat lengkap dengan `exception.ToString()` (`"Penyusunan pratinjau cetak gagal"`, `"Pratinjau cetak gagal"`, `"Pratinjau cetak kehabisan memori"`, `"Galat susulan pada penyusunan pratinjau cetak"`, `"Pembersihan pratinjau cetak"`), tetapi tidak pernah dicetak ke kertas (2.12). Isi dokumen tidak dicatat dengan sengaja (kode tidak pernah menulis teks dokumen ke log); namun isi dokumen bisa muncul bila ada dalam pesan pustaka (belum diverifikasi) | `CrashLog.cs:28-50`, `DocumentView.xaml.cs:521, 682` | `Write_AppendsContextAndExceptionToLogFile_*` (`CrashLogTests.cs:87`), `Write_RecordsContextExceptionTypeAndTimestamp_*` (`IoAndUtilityCoverageTests.cs:633`) |
-| Lokasi dan izin | `%LOCALAPPDATA%\MdViewer\crash.log`; teks biasa tidak dienkripsi; mewarisi izin folder pengguna (tidak ada ACL khusus di kode) | `CrashLog.cs:25-26` | - |
+| Lokasi dan izin | `%LOCALAPPDATA%\Makdon\crash.log`; teks biasa tidak dienkripsi; mewarisi izin folder pengguna (tidak ada ACL khusus di kode) | `CrashLog.cs:25-26` | - |
 | Batas ukuran | Bila > 512 KB sebelum menulis, **seluruh** file dihapus lalu entri baru ditulis | `CrashLog.cs:16, 38` | `Write_LogOneByteOverTheLimit_IsDiscarded_*`, `Write_RepeatedlyOverTheLimit_NeverGrowsWithoutBound` (`IoAndUtilityCoverageTests.cs:567-591`) |
 | Tidak boleh crash karena log | Semua galat I/O diabaikan; serialisasi `lock` | `CrashLog.cs:34-49` | `Write_WhenLogPathIsUnwritable_DoesNotThrow` (`CrashLogTests.cs:102`), `Write_ConcurrentWriters_*` (`IoAndUtilityCoverageTests.cs:616`) |
 | Dialog tidak membanjiri pengguna | Jenis+pesan sama dalam 10 dtk hanya dicatat | `CrashLog.cs:79-91` | `ShouldShowDialog_*` (`CrashLogTests.cs:46-66`) |
@@ -199,7 +199,7 @@ tidak diubah supaya rujukan lama tetap valid.
 | R9 | Dokumen yang belum disimpan hilang pada galat fatal: hanya path/mode/caret yang masuk sesi; tidak ada penyimpanan otomatis atau pemulihan draf (README). | `MainWindow.xaml.cs:215-232`, README Batasan | Kode |
 | R10 | `crash.log` berisi path dan stack trace dalam teks biasa. | `CrashLog.cs:41-43` | Kode |
 | R11 | Pengecekan kesamaan kunci tema dan pengujian UI utama (`MainWindow`, `App`) tidak otomatis; regresi di sana tidak tertangkap test. Lihat [TESTING.md](TESTING.md#yang-tidak-teruji). | - | Kode |
-| R12 | Dependensi pihak ketiga (Markdig.Wpf 0.5.0.1, AvalonEdit 6.3.1.120, xUnit dkk.) dipasang dengan versi tetap; tidak ada pemindaian kerentanan dependensi atau CI di repo. Hasil publish tidak ditandatangani dalam skrip yang ada (belum diverifikasi). | `MdViewer.csproj:35-36`, tidak ada `.github/` | Kode |
+| R12 | Dependensi pihak ketiga (Markdig.Wpf 0.5.0.1, AvalonEdit 6.3.1.120, xUnit dkk.) dipasang dengan versi tetap; tidak ada pemindaian kerentanan dependensi atau CI di repo. Hasil publish tidak ditandatangani dalam skrip yang ada (belum diverifikasi). | `Makdon.csproj:35-36`, tidak ada `.github/` | Kode |
 | R13 | Perilaku pustaka tidak diverifikasi di repo: bahwa Markdig.Wpf mengabaikan HTML mentah, bahwa `MarkdownPipeline` aman dipakai bersamaan dari thread latar dan UI (kini juga oleh parse snapshot cetak di thread latar, yang bisa berjalan bersamaan dengan render pratinjau utama). | `DocumentView.xaml.cs:401`, `PrintLayout.cs:99` | **Belum diverifikasi** |
 
 ## 4. Risiko yang sudah ditutup

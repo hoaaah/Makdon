@@ -1,9 +1,9 @@
 <#
-  Membuat Assets\app.ico (ikon MdViewer) dengan System.Drawing. Tidak dijalankan saat build;
+  Membuat Assets\app.ico (ikon Makdon) dengan System.Drawing. Tidak dijalankan saat build;
   jalankan manual bila ikon ingin diubah:  powershell -File scripts\generate-icon.ps1
 #>
 param(
-    [string]$Output = (Join-Path $PSScriptRoot '..\src\MdViewer\Assets\app.ico')
+    [string]$Output = (Join-Path $PSScriptRoot '..\src\Makdon\Assets\app.ico')
 )
 
 Add-Type -AssemblyName System.Drawing

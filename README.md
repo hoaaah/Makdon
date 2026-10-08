@@ -1,4 +1,4 @@
-# MdViewer
+# Makdon
 
 Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit di kiri, lihat hasilnya langsung di kanan.
 
@@ -31,7 +31,7 @@ Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit
   pratinjau yang terbuka. Hasil cetak selalu berlatar putih dengan tema Terang walau aplikasi bertema Gelap. Tombol **Cetak...** di
   jendela pratinjau mencetak halaman yang sama dengan yang tampil. Bila kertas atau orientasi yang dipilih di dialog Cetak berbeda dari
   pratinjau, Anda ditanya: "Cetak sesuai pratinjau" atau "Batal" (halaman pratinjau berukuran tetap).
-- Satu instance per pengguna per sesi Windows: membuka file `.md` saat MdViewer sudah berjalan (di sesi yang sama)
+- Satu instance per pengguna per sesi Windows: membuka file `.md` saat Makdon sudah berjalan (di sesi yang sama)
   membukanya sebagai tab di jendela yang ada. Sesi Windows lain (mis. Remote Desktop) punya instance sendiri.
 
 ### Keamanan
@@ -83,18 +83,18 @@ Riwayat perubahan: [CHANGELOG.md](CHANGELOG.md).
 Butuh .NET 9 SDK.
 
 ```powershell
-dotnet build MdViewer.sln
-dotnet test src/MdViewer.Tests
-dotnet run --project src/MdViewer -- contoh.md
+dotnet build Makdon.sln
+dotnet test src/Makdon.Tests
+dotnet run --project src/Makdon -- contoh.md
 ```
 
 Publish satu file (butuh .NET 9 Desktop Runtime di mesin tujuan):
 
 ```powershell
-dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet publish src/Makdon -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
 ```
 
-Hasil: `src\MdViewer\bin\Release\net9.0-windows\win-x64\publish\MdViewer.exe`.
+Hasil: `src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe`.
 
 ## Asosiasi file (.md)
 
@@ -106,18 +106,18 @@ powershell -ExecutionPolicy Bypass -File scripts\register-file-association.ps1
 powershell -ExecutionPolicy Bypass -File scripts\unregister-file-association.ps1          # batalkan
 ```
 
-Windows 10/11 melindungi pilihan aplikasi bawaan, jadi setelah mendaftar pilih MdViewer lewat klik kanan berkas >
+Windows 10/11 melindungi pilihan aplikasi bawaan, jadi setelah mendaftar pilih Makdon lewat klik kanan berkas >
 Buka dengan > Pilih aplikasi lain (centang "Selalu gunakan"), atau di Pengaturan > Aplikasi > Aplikasi bawaan.
 `-SetDefault` menulis nilai bawaan ekstensi di HKCU dan mencadangkan nilai lama ke
-`HKCU\Software\MdViewer\PreviousDefault`; skrip unregister memulihkannya. `-Extensions` hanya menerima huruf kecil
+`HKCU\Software\Makdon\PreviousDefault`; skrip unregister memulihkannya. `-Extensions` hanya menerima huruf kecil
 dan angka (mis. `.md`).
 
 ## Lokasi data
 
 | Data | Lokasi |
 | --- | --- |
-| Pengaturan (tema, zoom, berkas terakhir, sesi, blokir gambar remote) | `%APPDATA%\MdViewer\settings.json` |
-| Catatan galat | `%LOCALAPPDATA%\MdViewer\crash.log` (bila lebih dari 512 KB, seluruh file dihapus lalu entri baru ditulis); kegagalan Pratinjau Cetak juga dicatat di sini |
+| Pengaturan (tema, zoom, berkas terakhir, sesi, blokir gambar remote) | `%APPDATA%\Makdon\settings.json` |
+| Catatan galat | `%LOCALAPPDATA%\Makdon\crash.log` (bila lebih dari 512 KB, seluruh file dihapus lalu entri baru ditulis); kegagalan Pratinjau Cetak juga dicatat di sini |
 
 Settings yang rusak atau hilang diabaikan (kembali ke bawaan). Saat keluar, daftar berkas terakhir digabung dengan isi
 file di disk supaya beberapa instance tidak saling menimpa.

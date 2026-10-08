@@ -1,10 +1,10 @@
 # Changelog
 
-Semua perubahan penting pada MdViewer dicatat di berkas ini.
+Semua perubahan penting pada Makdon dicatat di berkas ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan penomoran versi mengikuti
 [Semantic Versioning](https://semver.org/).
 
-> Catatan: properti `<Version>` di `src/MdViewer/MdViewer.csproj` disamakan dengan nomor rilis di berkas ini (0.1.0). Ubah keduanya
+> Catatan: properti `<Version>` di `src/Makdon/Makdon.csproj` disamakan dengan nomor rilis di berkas ini (0.1.0). Ubah keduanya
 > bersama saat rilis berikutnya.
 > Repo belum punya remote/tag, jadi tidak ada tautan perbandingan versi. Riwayat git baru dua commit (`448e1ad`, `b2a35be`); isi 0.1.0
 > disusun dari kode, test, README, dan CLAUDE.md pada commit pertama.
@@ -46,10 +46,19 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan p
   jatuh ke A4 potret (`PageLayout.FromPrintableArea`).
 - Tautan `file:///C:/x.md` absolut di pratinjau kini dibuka (sebelumnya string URL mentah digabung ke `Path.Combine` dan tidak pernah
   berhasil); `file://host/...` tetap ditolak.
-- Properti `<Version>` di `MdViewer.csproj` disamakan menjadi `0.1.0` (sebelumnya `1.0.0`).
+- Properti `<Version>` di `Makdon.csproj` disamakan menjadi `0.1.0` (sebelumnya `1.0.0`).
 
 ### Changed
 
+- **Aplikasi dinamai Makdon** (sebelumnya bernama MdViewer). Berubah: folder dan proyek (`src/Makdon`, `src/Makdon.Tests`, `Makdon.sln`,
+  `Makdon.csproj`), nama assembly dan namespace (`Makdon`), berkas hasil publish (`Makdon.exe`), judul jendela ("... — Makdon") dan caption dialog,
+  serta dokumentasi dan skrip. Perilaku tidak berubah.
+- Nama yang dipakai di mesin pengguna ikut berubah, sehingga data lama **tidak dimigrasikan** (aplikasi belum pernah dirilis; versi 0.1.0 belum ditag):
+  pengaturan kini di `%APPDATA%\Makdon\settings.json` (sebelumnya `%APPDATA%\MdViewer`), catatan galat di `%LOCALAPPDATA%\Makdon\crash.log`
+  (sebelumnya `%LOCALAPPDATA%\MdViewer`), Mutex `Local\Makdon.SingleInstance.<SID>` dan pipe `Makdon.<SID>.s<sesi>`, header pesan pipe `MAKDON1`,
+  serta pendaftaran file di HKCU (ProgID `Makdon.Markdown`, `Applications\Makdon.exe`, `HKCU\Software\Makdon`). Pengaturan, sesi, dan log lama di
+  folder `MdViewer` tidak dibaca lagi (hapus manual bila tidak diperlukan). Instance versi lama dan baru tidak saling mengenali, jadi tutup yang lama
+  sebelum membuka yang baru. `unregister-file-association.ps1` juga membersihkan sisa pendaftaran `MdViewer` bila ada.
 - Cetak (Ctrl+P): margin halaman 0,75" (sebelumnya 0,5"), kaki halaman, ukuran halaman dari dialog Cetak lewat `PageLayout`, pembuatan dokumen dari snapshot lewat
   `PrintService`; tooltip tombol toolbar "Cetak pratinjau (Ctrl+P)" menjadi "Cetak (Ctrl+P)". Menu Berkas dan toolbar mendapat Pratinjau Cetak.
 - Ctrl+P saat fokus di panel pratinjau utama kini ikut jalur cetak aplikasi (tema Terang, margin, kaki halaman); sebelumnya pengikatan bawaan
@@ -79,13 +88,13 @@ Rilis awal.
 - Deteksi perubahan file dari luar (watcher + pemeriksaan saat jendela aktif): tab bersih dimuat ulang otomatis; tab kotor menanyakan
   satu per satu lewat dialog berlabel; konflik saat menyimpan menawarkan Timpa, Muat dari Disk, atau Batal. Muat ulang adalah satu langkah Undo.
 - Ekspor ke HTML mandiri dan cetak pratinjau.
-- Satu instance per pengguna per sesi Windows (Mutex + named pipe); membuka `.md` saat MdViewer berjalan membukanya sebagai tab.
+- Satu instance per pengguna per sesi Windows (Mutex + named pipe); membuka `.md` saat Makdon berjalan membukanya sebagai tab.
 - Skrip asosiasi file `.md`/`.markdown` yang hanya menulis ke HKCU (`register-file-association.ps1`, `unregister-file-association.ps1`, mendukung `-WhatIf`) dan pembuat ikon.
-- Penanganan galat global dengan catatan `%LOCALAPPDATA%\MdViewer\crash.log` (batas 512 KB); galat yang aman dilanjutkan, galat fatal menyimpan sesi lalu menutup aplikasi.
-- Pengaturan di `%APPDATA%\MdViewer\settings.json` (tema, zoom, blokir gambar remote, berkas terakhir, sesi); file hilang/rusak kembali ke bawaan.
+- Penanganan galat global dengan catatan `%LOCALAPPDATA%\Makdon\crash.log` (batas 512 KB); galat yang aman dilanjutkan, galat fatal menyimpan sesi lalu menutup aplikasi.
+- Pengaturan di `%APPDATA%\Makdon\settings.json` (tema, zoom, blokir gambar remote, berkas terakhir, sesi); file hilang/rusak kembali ke bawaan.
 - Status bar: posisi kursor, jumlah kata/karakter, encoding, mode, zoom.
 - Batas file: konfirmasi di atas 50 MB, penolakan di atas 500 MB.
-- Proyek test xUnit (`src/MdViewer.Tests`), sub-agent proyek (`.claude/agents`), dan dokumentasi pengembangan di `docs/`.
+- Proyek test xUnit (`src/Makdon.Tests`), sub-agent proyek (`.claude/agents`), dan dokumentasi pengembangan di `docs/`.
 
 ### Security
 

@@ -1,0 +1,378 @@
+<Window x:Class="Makdon.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Makdon"
+        Style="{StaticResource AppWindow}"
+        Title="{Binding SelectedItem.WindowTitle, ElementName=Tabs, FallbackValue=Makdon, TargetNullValue=Makdon}"
+        Icon="Assets/app.ico"
+        Width="1200" Height="780" MinWidth="640" MinHeight="420" AllowDrop="True"
+        PreviewDragOver="Window_PreviewDragOver" PreviewDrop="Window_PreviewDrop"
+        Closing="Window_Closing">
+
+    <Window.Resources>
+        <local:ViewModeConverter x:Key="ViewModeConverter" />
+        <local:ViewModeLabelConverter x:Key="ViewModeLabelConverter" />
+        <local:EditorVisibleConverter x:Key="EditorVisibleConverter" />
+        <local:PathPartConverter x:Key="PathPartConverter" />
+
+        <RoutedUICommand x:Key="ViewEditCommand" Text="Editor" />
+        <RoutedUICommand x:Key="ViewSplitCommand" Text="Terpisah" />
+        <RoutedUICommand x:Key="ViewPreviewCommand" Text="Pratinjau" />
+        <RoutedUICommand x:Key="NextTabCommand" Text="Tab Berikutnya" />
+        <RoutedUICommand x:Key="PreviousTabCommand" Text="Tab Sebelumnya" />
+
+        <!-- Header tab: judul, titik "belum disimpan" (diganti tombol tutup saat disorot), tooltip path. -->
+        <DataTemplate x:Key="TabHeaderTemplate" DataType="{x:Type local:DocumentTab}">
+            <StackPanel Orientation="Horizontal" ToolTip="{Binding PathText}"
+                        Background="Transparent" MouseDown="TabHeader_MouseDown"
+                        AutomationProperties.Name="{Binding DisplayTitle}">
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" MaxWidth="220"
+                           TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+                <Grid Width="18" Height="18" VerticalAlignment="Center">
+                    <Ellipse x:Name="DirtyDot" Width="9" Height="9" Visibility="Collapsed"
+                             Fill="{DynamicResource DirtyBrush}" ToolTip="Ada perubahan yang belum disimpan" />
+                    <Button x:Name="CloseButton" Style="{StaticResource TabCloseButton}" Visibility="Hidden"
+                            ToolTip="Tutup tab (Ctrl+W)" Click="CloseTab_Click"
+                            AutomationProperties.Name="Tutup tab" />
+                </Grid>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                    <Setter TargetName="CloseButton" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                    <Setter TargetName="DirtyDot" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="CloseButton" Property="Visibility" Value="Hidden" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                    <Setter TargetName="DirtyDot" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="CloseButton" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TabContentTemplate" DataType="{x:Type local:DocumentTab}">
+            <ContentPresenter Content="{Binding View}" />
+        </DataTemplate>
+
+        <!-- Menu tarik-turun tombol Heading pada toolbar format. -->
+        <ContextMenu x:Key="HeadingMenu">
+            <MenuItem Header="Heading _1" Tag="1" Click="HeadingItem_Click" />
+            <MenuItem Header="Heading _2" Tag="2" Click="HeadingItem_Click" />
+            <MenuItem Header="Heading _3" Tag="3" Click="HeadingItem_Click" />
+            <MenuItem Header="Heading _4" Tag="4" Click="HeadingItem_Click" />
+            <Separator />
+            <MenuItem Header="_Teks biasa" Tag="0" Click="HeadingItem_Click" />
+        </ContextMenu>
+    </Window.Resources>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="ApplicationCommands.New" Executed="New_Executed" />
+        <CommandBinding Command="ApplicationCommands.Open" Executed="Open_Executed" />
+        <CommandBinding Command="ApplicationCommands.Save" Executed="Save_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="ApplicationCommands.SaveAs" Executed="SaveAs_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="ApplicationCommands.Close" Executed="Close_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="ApplicationCommands.Print" Executed="Print_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.PrintPreview}" Executed="PrintPreview_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="ApplicationCommands.Find" Executed="Find_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="ApplicationCommands.Replace" Executed="Replace_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.FindNext}" Executed="FindNext_Executed" CanExecute="CanEdit_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.FindPrevious}" Executed="FindNext_Executed" CanExecute="CanEdit_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.ExportHtml}" Executed="ExportHtml_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.ZoomIn}" Executed="Zoom_Executed" />
+        <CommandBinding Command="{x:Static local:AppCommands.ZoomOut}" Executed="Zoom_Executed" />
+        <CommandBinding Command="{x:Static local:AppCommands.ZoomReset}" Executed="Zoom_Executed" />
+        <CommandBinding Command="{x:Static local:AppCommands.SetTheme}" Executed="SetTheme_Executed" />
+        <CommandBinding Command="{x:Static local:AppCommands.Bold}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.Italic}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.InlineCode}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.Heading}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.HeadingMenu}" Executed="HeadingMenu_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.BulletList}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.Quote}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.Link}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.Image}" Executed="Format_Executed" CanExecute="CanFormat_CanExecute" />
+        <CommandBinding Command="{StaticResource NextTabCommand}" Executed="NextTab_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{StaticResource PreviousTabCommand}" Executed="PreviousTab_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{StaticResource ViewEditCommand}" Executed="ViewMode_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{StaticResource ViewSplitCommand}" Executed="ViewMode_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{StaticResource ViewPreviewCommand}" Executed="ViewMode_Executed" CanExecute="HasTab_CanExecute" />
+    </Window.CommandBindings>
+
+    <Window.InputBindings>
+        <KeyBinding Key="W" Modifiers="Ctrl" Command="ApplicationCommands.Close" />
+        <KeyBinding Key="S" Modifiers="Ctrl+Shift" Command="ApplicationCommands.SaveAs" />
+        <KeyBinding Key="Tab" Modifiers="Ctrl" Command="{StaticResource NextTabCommand}" />
+        <KeyBinding Key="Tab" Modifiers="Ctrl+Shift" Command="{StaticResource PreviousTabCommand}" />
+        <KeyBinding Key="D1" Modifiers="Ctrl" Command="{StaticResource ViewEditCommand}" />
+        <KeyBinding Key="D2" Modifiers="Ctrl" Command="{StaticResource ViewSplitCommand}" />
+        <KeyBinding Key="D3" Modifiers="Ctrl" Command="{StaticResource ViewPreviewCommand}" />
+    </Window.InputBindings>
+
+    <DockPanel>
+        <Menu DockPanel.Dock="Top" AutomationProperties.Name="Menu utama">
+            <MenuItem Header="_Berkas">
+                <MenuItem Header="_Baru" Command="ApplicationCommands.New" />
+                <MenuItem Header="_Buka..." Command="ApplicationCommands.Open" />
+                <MenuItem Header="Berkas T_erakhir" IsEnabled="{Binding HasItems, RelativeSource={RelativeSource Self}}"
+                          ItemsSource="{Binding RecentFiles, RelativeSource={RelativeSource AncestorType=Window}}">
+                    <MenuItem.ItemContainerStyle>
+                        <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                            <Setter Property="Header" Value="{Binding Converter={StaticResource PathPartConverter}, ConverterParameter=MenuName}" />
+                            <Setter Property="ToolTip" Value="{Binding}" />
+                            <EventSetter Event="Click" Handler="RecentMenuItem_Click" />
+                        </Style>
+                    </MenuItem.ItemContainerStyle>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="_Simpan" Command="ApplicationCommands.Save" />
+                <MenuItem Header="Simpan _Sebagai..." Command="ApplicationCommands.SaveAs" InputGestureText="Ctrl+Shift+S" />
+                <MenuItem Header="E_kspor sebagai HTML..." Command="{x:Static local:AppCommands.ExportHtml}" />
+                <Separator />
+                <MenuItem Header="Pra_tinjau Cetak..." Command="{x:Static local:AppCommands.PrintPreview}" />
+                <MenuItem Header="_Cetak..." Command="ApplicationCommands.Print" />
+                <Separator />
+                <MenuItem Header="_Tutup Tab" Command="ApplicationCommands.Close" InputGestureText="Ctrl+W" />
+                <MenuItem Header="_Keluar" Click="Exit_Click" InputGestureText="Alt+F4" />
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Cari..." Command="ApplicationCommands.Find" />
+                <MenuItem Header="_Ganti..." Command="ApplicationCommands.Replace" />
+                <MenuItem Header="Cari _Berikutnya" Command="{x:Static local:AppCommands.FindNext}" />
+                <MenuItem Header="Cari _Sebelumnya" Command="{x:Static local:AppCommands.FindPrevious}" />
+                <Separator />
+                <MenuItem Header="_Format">
+                    <MenuItem Header="_Tebal" Command="{x:Static local:AppCommands.Bold}" />
+                    <MenuItem Header="_Miring" Command="{x:Static local:AppCommands.Italic}" />
+                    <MenuItem Header="_Kode Inline" Command="{x:Static local:AppCommands.InlineCode}" />
+                    <Separator />
+                    <MenuItem Header="Heading _1" Command="{x:Static local:AppCommands.Heading}" CommandParameter="1" />
+                    <MenuItem Header="Heading _2" Command="{x:Static local:AppCommands.Heading}" CommandParameter="2" />
+                    <MenuItem Header="Heading _3" Command="{x:Static local:AppCommands.Heading}" CommandParameter="3" />
+                    <MenuItem Header="Teks _Biasa" Command="{x:Static local:AppCommands.Heading}" CommandParameter="0" />
+                    <Separator />
+                    <MenuItem Header="_Daftar" Command="{x:Static local:AppCommands.BulletList}" />
+                    <MenuItem Header="K_utipan" Command="{x:Static local:AppCommands.Quote}" />
+                    <MenuItem Header="Ta_utan" Command="{x:Static local:AppCommands.Link}" />
+                    <MenuItem Header="_Gambar" Command="{x:Static local:AppCommands.Image}" />
+                </MenuItem>
+            </MenuItem>
+            <MenuItem Header="_Tampilan">
+                <MenuItem Header="_Editor" Command="{StaticResource ViewEditCommand}" InputGestureText="Ctrl+1" />
+                <MenuItem Header="_Terpisah" Command="{StaticResource ViewSplitCommand}" InputGestureText="Ctrl+2" />
+                <MenuItem Header="_Pratinjau" Command="{StaticResource ViewPreviewCommand}" InputGestureText="Ctrl+3" />
+                <Separator />
+                <MenuItem Header="T_ema">
+                    <MenuItem x:Name="ThemeLightItem" Header="_Terang" Command="{x:Static local:AppCommands.SetTheme}" CommandParameter="Light" />
+                    <MenuItem x:Name="ThemeDarkItem" Header="_Gelap" Command="{x:Static local:AppCommands.SetTheme}" CommandParameter="Dark" />
+                    <MenuItem x:Name="ThemeSystemItem" Header="_Ikuti Sistem" Command="{x:Static local:AppCommands.SetTheme}" CommandParameter="System" />
+                </MenuItem>
+                <MenuItem Header="_Zoom">
+                    <MenuItem Header="_Perbesar" Command="{x:Static local:AppCommands.ZoomIn}" />
+                    <MenuItem Header="P_erkecil" Command="{x:Static local:AppCommands.ZoomOut}" />
+                    <MenuItem Header="_Normal (100%)" Command="{x:Static local:AppCommands.ZoomReset}" />
+                </MenuItem>
+                <Separator />
+                <MenuItem x:Name="LoadRemoteImagesItem" Header="_Muat gambar remote" IsCheckable="True"
+                          Click="LoadRemoteImages_Click"
+                          ToolTip="Tampilkan gambar http(s) di pratinjau dan cetak. Mati (bawaan): gambar remote diganti teks agar tidak melacak Anda." />
+            </MenuItem>
+        </Menu>
+
+        <ToolBar DockPanel.Dock="Top" ToolBarTray.IsLocked="True" AutomationProperties.Name="Toolbar">
+            <Button Command="ApplicationCommands.New" ToolTip="Dokumen baru (Ctrl+N)" AutomationProperties.Name="Dokumen baru">
+                <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+            </Button>
+            <Button Command="ApplicationCommands.Open" ToolTip="Buka berkas (Ctrl+O)" AutomationProperties.Name="Buka berkas">
+                <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+            </Button>
+            <Button Command="ApplicationCommands.Save" ToolTip="Simpan (Ctrl+S)" AutomationProperties.Name="Simpan">
+                <TextBlock Text="&#xE74E;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+            </Button>
+            <Button Command="ApplicationCommands.Print" ToolTip="Cetak (Ctrl+P)" AutomationProperties.Name="Cetak">
+                <TextBlock Text="&#xE749;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+            </Button>
+            <Button Command="{x:Static local:AppCommands.PrintPreview}" ToolTip="Pratinjau cetak (Ctrl+Shift+P)" AutomationProperties.Name="Pratinjau cetak">
+                <TextBlock Text="&#xE8A1;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+            </Button>
+            <Separator />
+
+            <!-- Segmented control: mode tampilan -->
+            <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="7" Padding="2" VerticalAlignment="Center"
+                    AutomationProperties.Name="Mode tampilan">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Content="Editor" GroupName="Mode" Style="{StaticResource SegmentedItem}"
+                                 ToolTip="Hanya editor (Ctrl+1)"
+                                 IsEnabled="{Binding SelectedItem, ElementName=Tabs, Converter={x:Static local:NotNullConverter.Instance}}"
+                                 IsChecked="{Binding SelectedItem.Mode, ElementName=Tabs, Mode=TwoWay, Converter={StaticResource ViewModeConverter}, ConverterParameter=Edit}" />
+                    <RadioButton Content="Terpisah" GroupName="Mode" Style="{StaticResource SegmentedItem}"
+                                 ToolTip="Editor dan pratinjau berdampingan (Ctrl+2)"
+                                 IsEnabled="{Binding SelectedItem, ElementName=Tabs, Converter={x:Static local:NotNullConverter.Instance}}"
+                                 IsChecked="{Binding SelectedItem.Mode, ElementName=Tabs, Mode=TwoWay, Converter={StaticResource ViewModeConverter}, ConverterParameter=Split}" />
+                    <RadioButton Content="Pratinjau" GroupName="Mode" Style="{StaticResource SegmentedItem}"
+                                 ToolTip="Hanya pratinjau (Ctrl+3)"
+                                 IsEnabled="{Binding SelectedItem, ElementName=Tabs, Converter={x:Static local:NotNullConverter.Instance}}"
+                                 IsChecked="{Binding SelectedItem.Mode, ElementName=Tabs, Mode=TwoWay, Converter={StaticResource ViewModeConverter}, ConverterParameter=Preview}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Format Markdown: hanya saat editor tampak (mode Editor/Terpisah) -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                        Visibility="{Binding SelectedItem.Mode, ElementName=Tabs, Converter={StaticResource EditorVisibleConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" />
+                <Button Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.Bold}"
+                        ToolTip="Tebal (Ctrl+B)" AutomationProperties.Name="Tebal">
+                    <TextBlock Text="B" FontWeight="Bold" FontSize="14" />
+                </Button>
+                <Button Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.Italic}"
+                        ToolTip="Miring (Ctrl+I)" AutomationProperties.Name="Miring">
+                    <TextBlock Text="I" FontStyle="Italic" FontSize="14" FontFamily="Georgia" />
+                </Button>
+                <Button Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.InlineCode}"
+                        ToolTip="Kode inline (Ctrl+E)" AutomationProperties.Name="Kode inline">
+                    <TextBlock Text="&lt;/&gt;" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="12" />
+                </Button>
+                <Button x:Name="HeadingButton" Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.HeadingMenu}"
+                        ToolTip="Heading" AutomationProperties.Name="Heading">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="H" FontWeight="Bold" FontSize="14" />
+                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="8" Margin="4,2,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.BulletList}"
+                        ToolTip="Daftar (Ctrl+Shift+L)" AutomationProperties.Name="Daftar">
+                    <TextBlock Text="&#xE8FD;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+                </Button>
+                <Button Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.Quote}"
+                        ToolTip="Kutipan (Ctrl+Shift+Q)" AutomationProperties.Name="Kutipan">
+                    <TextBlock Text="&#x201C;" FontFamily="Georgia" FontWeight="Bold" FontSize="22" Margin="0,4,0,0" />
+                </Button>
+                <Button Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.Link}"
+                        ToolTip="Tautan (Ctrl+K)" AutomationProperties.Name="Tautan">
+                    <TextBlock Text="&#xE71B;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+                </Button>
+                <Button Style="{StaticResource IconButton}" Command="{x:Static local:AppCommands.Image}"
+                        ToolTip="Gambar (Ctrl+Shift+I)" AutomationProperties.Name="Gambar">
+                    <TextBlock Text="&#xE91B;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+                </Button>
+            </StackPanel>
+        </ToolBar>
+
+        <!-- Status bar: item yang didok ke kanan ditulis dulu (paling kanan = pertama); path mengisi sisanya. -->
+        <StatusBar x:Name="Status" DockPanel.Dock="Bottom" AutomationProperties.Name="Status">
+            <StatusBarItem DockPanel.Dock="Right">
+                <TextBlock x:Name="ZoomText" Text="100%" ToolTip="Zoom (Ctrl+roda mouse; Ctrl+0 untuk normal)" />
+            </StatusBarItem>
+            <Separator DockPanel.Dock="Right" />
+            <StatusBarItem DockPanel.Dock="Right">
+                <TextBlock Text="{Binding SelectedItem.Mode, ElementName=Tabs, Converter={StaticResource ViewModeLabelConverter}}" ToolTip="Mode tampilan" />
+            </StatusBarItem>
+            <Separator DockPanel.Dock="Right" />
+            <StatusBarItem DockPanel.Dock="Right">
+                <TextBlock Text="{Binding SelectedItem.EncodingLabel, ElementName=Tabs}" ToolTip="Encoding berkas" />
+            </StatusBarItem>
+            <Separator DockPanel.Dock="Right" />
+            <StatusBarItem DockPanel.Dock="Right">
+                <TextBlock Text="{Binding SelectedItem.StatsText, ElementName=Tabs}" ToolTip="Jumlah kata dan karakter" />
+            </StatusBarItem>
+            <Separator DockPanel.Dock="Right" />
+            <StatusBarItem DockPanel.Dock="Right">
+                <TextBlock Text="{Binding SelectedItem.CaretText, ElementName=Tabs}" ToolTip="Posisi kursor" />
+            </StatusBarItem>
+            <StatusBarItem>
+                <TextBlock Text="{Binding SelectedItem.PathText, ElementName=Tabs}"
+                           ToolTip="{Binding SelectedItem.PathText, ElementName=Tabs}" TextTrimming="CharacterEllipsis" />
+            </StatusBarItem>
+        </StatusBar>
+
+        <Grid>
+            <TabControl x:Name="Tabs" ItemTemplate="{StaticResource TabHeaderTemplate}"
+                        ContentTemplate="{StaticResource TabContentTemplate}"
+                        SelectionChanged="Tabs_SelectionChanged" />
+
+            <!-- Keadaan kosong -->
+            <Grid x:Name="EmptyState" Background="{DynamicResource SurfaceBrush}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                    <StackPanel MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,32">
+                        <!-- Ilustrasi sederhana: lembar dokumen dengan lencana "M↓" -->
+                        <Viewbox Width="132" Height="132" HorizontalAlignment="Center" AutomationProperties.Name="Ilustrasi dokumen Markdown">
+                            <Canvas Width="120" Height="120">
+                                <Path Data="M30,10 H72 L98,36 V104 A6,6 0 0 1 92,110 H30 A6,6 0 0 1 24,104 V16 A6,6 0 0 1 30,10 Z"
+                                      Fill="{DynamicResource SurfaceAltBrush}" Stroke="{DynamicResource BorderStrongBrush}" StrokeThickness="2"
+                                      StrokeLineJoin="Round" />
+                                <Path Data="M72,10 V36 H98" Fill="{DynamicResource SurfaceBrush}" Stroke="{DynamicResource BorderStrongBrush}"
+                                      StrokeThickness="2" StrokeLineJoin="Round" />
+                                <Rectangle Canvas.Left="36" Canvas.Top="26" Width="26" Height="5" RadiusX="2.5" RadiusY="2.5"
+                                           Fill="{DynamicResource BorderStrongBrush}" />
+                                <Rectangle Canvas.Left="36" Canvas.Top="84" Width="48" Height="5" RadiusX="2.5" RadiusY="2.5"
+                                           Fill="{DynamicResource BorderStrongBrush}" />
+                                <Rectangle Canvas.Left="36" Canvas.Top="94" Width="34" Height="5" RadiusX="2.5" RadiusY="2.5"
+                                           Fill="{DynamicResource BorderStrongBrush}" />
+                                <Border Canvas.Left="36" Canvas.Top="40" Width="52" Height="36" CornerRadius="8"
+                                        Background="{DynamicResource AccentBrush}">
+                                    <TextBlock Text="M↓" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource AccentForegroundBrush}" />
+                                </Border>
+                            </Canvas>
+                        </Viewbox>
+
+                        <TextBlock Text="Mulai menulis Markdown" FontSize="26" FontWeight="SemiBold" TextAlignment="Center" Margin="0,12,0,6" />
+                        <TextBlock Text="Buka berkas yang ada atau buat dokumen baru. Pratinjau tampil langsung saat Anda mengetik."
+                                   TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" FontSize="14" />
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,22,0,0">
+                            <Button Style="{StaticResource AccentButton}" Command="ApplicationCommands.Open"
+                                    ToolTip="Buka berkas (Ctrl+O)" AutomationProperties.Name="Buka file">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource IconFont}" Margin="0,1,8,0" />
+                                    <TextBlock Text="Buka file" />
+                                </StackPanel>
+                            </Button>
+                            <Button Margin="10,0,0,0" Padding="18,8" Command="ApplicationCommands.New"
+                                    ToolTip="Dokumen baru (Ctrl+N)" AutomationProperties.Name="Dokumen baru">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" Margin="0,1,8,0" />
+                                    <TextBlock Text="Dokumen baru" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <StackPanel x:Name="RecentPanel" Margin="0,30,0,0">
+                            <TextBlock Text="Terakhir dibuka" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="12,0,0,4" />
+                            <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          Focusable="False">
+                                <ItemsControl ItemsSource="{Binding RecentFiles, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              KeyboardNavigation.TabNavigation="Continue">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource RecentItemButton}" Click="RecentItem_Click"
+                                                    ToolTip="{Binding}"
+                                                    AutomationProperties.Name="{Binding Converter={StaticResource PathPartConverter}, ConverterParameter=Name}">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Converter={StaticResource PathPartConverter}, ConverterParameter=Name}"
+                                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Converter={StaticResource PathPartConverter}, ConverterParameter=Directory}"
+                                                               FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+
+                        <!-- Petunjuk seret-lepas -->
+                        <Grid Margin="0,26,0,0" Height="54">
+                            <Rectangle RadiusX="10" RadiusY="10" StrokeThickness="1.5" StrokeDashArray="4 3"
+                                       Stroke="{DynamicResource BorderStrongBrush}" />
+                            <TextBlock Text="Atau seret &amp; lepas berkas .md ke jendela ini" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

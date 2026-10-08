@@ -1,6 +1,6 @@
 # Catatan Keputusan Desain (ADR ringkas)
 
-**Tujuan:** mencatat keputusan desain yang tampak di kode MdViewer beserta konteks, keputusan, dan konsekuensinya, supaya
+**Tujuan:** mencatat keputusan desain yang tampak di kode Makdon beserta konteks, keputusan, dan konsekuensinya, supaya
 perubahan di masa depan tidak melanggar alasan aslinya tanpa sadar.
 **Pembaca:** pengembang dan reviewer.
 
@@ -58,7 +58,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konsekuensi.** File `~md########.tmp` muncul sebentar di folder dokumen. Jalur `WriteInPlace` tidak atomik (README, bagian
   Batasan). Penulisan dokumen, ekspor HTML, dan `settings.json` memakai jalur yang sama: `TextFileIO.Write`. Pengecualian: `crash.log`
   ditulis dengan `File.AppendAllText` (`CrashLog.cs:41`), bukan atomik.
-- **Bukti.** `src/MdViewer/TextFileIO.cs:134-202`, `HtmlExporter.cs:66`, `AppSettings.cs:82`. Test:
+- **Bukti.** `src/Makdon/TextFileIO.cs:134-202`, `HtmlExporter.cs:66`, `AppSettings.cs:82`. Test:
   `TextFileIOCoverageTests.WriteBytesAtomic_*` (`IoAndUtilityCoverageTests.cs:97-196`, termasuk fallback lewat ACL deny
   CreateFiles), `TextFileIOHardeningTests.Write_VeryLongFileName_StillSavesAtomically` (`HardeningTests.cs:669`),
   `TextFileIOFileTests.Write_*` (`TextFileIOTests.cs:295-445`). Penulisan lewat symlink hanya teruji bila mesin boleh membuat symlink
@@ -187,12 +187,12 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 
 ## ADR-08 Single-instance dengan Mutex dan named pipe per sesi
 
-- **Konteks.** Membuka `.md` saat MdViewer berjalan harus membuka tab di jendela yang ada, tetapi sesi Windows lain (mis. Remote
+- **Konteks.** Membuka `.md` saat Makdon berjalan harus membuka tab di jendela yang ada, tetapi sesi Windows lain (mis. Remote
   Desktop) punya instance sendiri (README). Komentar `SingleInstance.cs:10-14`: `Mutex` `Local\` sudah per sesi, sedangkan nama pipe
   global se-mesin sehingga id sesi dimasukkan ke nama pipe agar cakupannya sama.
-- **Keputusan.** Nama mutex `Local\MdViewer.SingleInstance.<SID>[.<scope>]`; nama pipe `MdViewer.<SID>.s<sessionId>[.<scope>]`; pipe
+- **Keputusan.** Nama mutex `Local\Makdon.SingleInstance.<SID>[.<scope>]`; nama pipe `Makdon.<SID>.s<sessionId>[.<scope>]`; pipe
   dibuka `PipeOptions.CurrentUserOnly` di kedua sisi, satu instance server. Protokol teks UTF-8: baris pertama harus persis
-  `MDVIEWER1`, lalu satu path per baris. Penerima menerima hanya path **fully-qualified** (`Path.IsPathFullyQualified`; `C:rel.md` dan
+  `MAKDON1`, lalu satu path per baris. Penerima menerima hanya path **fully-qualified** (`Path.IsPathFullyQualified`; `C:rel.md` dan
   `\rel.md` ditolak karena bergantung folder/drive kerja), panjang < 32768, maksimal 64 path, pesan maksimal 256 K karakter, batas
   baca 5 dtk per klien. `BuildMessage` membuang entri yang mengandung `\n`/`\r` (injeksi path). Klien yang macet atau mengirim sampah
   tidak menambah hitungan kegagalan; hanya kegagalan membuat/menunggu pipe yang dihitung (menyerah setelah 5). Seluruh kelas "tidak pernah
@@ -352,11 +352,13 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konteks.** README: hanya menulis ke HKCU, tanpa hak administrator; Windows 10/11 melindungi pilihan aplikasi bawaan.
 - **Keputusan.** `register-file-association.ps1`/`unregister-file-association.ps1` memakai `SupportsShouldProcess` (`-WhatIf`), menulis
   lewat `Registry.CurrentUser`, memvalidasi `-Extensions` dengan `'^\.[a-z0-9]+$'` (ekstensi dipakai sebagai nama subkey registri),
-  dan `-SetDefault` mencadangkan nilai bawaan lama ke `HKCU\Software\MdViewer\PreviousDefault` yang dipulihkan skrip unregister.
-  Unregister hanya menyentuh nilai bawaan yang persis menunjuk ke ProgID MdViewer dan tidak menyentuh `UserChoice`.
-- **Konsekuensi.** Skrip tidak bisa memaksa MdViewer menjadi aplikasi bawaan. Tidak ada test otomatis untuk skrip (CLAUDE.md melarang
+  dan `-SetDefault` mencadangkan nilai bawaan lama ke `HKCU\Software\Makdon\PreviousDefault` yang dipulihkan skrip unregister.
+  Unregister hanya menyentuh nilai bawaan yang persis menunjuk ke ProgID Makdon dan tidak menyentuh `UserChoice`.
+  Unregister juga membersihkan sisa pendaftaran lama dari masa aplikasi ini bernama MdViewer (ProgID `MdViewer.Markdown`,
+  `Applications\MdViewer.exe`, `Software\MdViewer`) dengan aturan yang sama; register tidak membuat kunci lama.
+- **Konsekuensi.** Skrip tidak bisa memaksa Makdon menjadi aplikasi bawaan. Tidak ada test otomatis untuk skrip (CLAUDE.md melarang
   menjalankan skrip registri sungguhan di test).
-- **Bukti.** `scripts/register-file-association.ps1:37, 68-70, 81-140`, `scripts/unregister-file-association.ps1:18, 31-33, 52-102`.
+- **Bukti.** `scripts/register-file-association.ps1:37, 68-70, 81-140`, `scripts/unregister-file-association.ps1:20, 36-38, 57-114`.
 
 ## ADR-19 Pratinjau Cetak lewat paket XPS di memori
 
@@ -365,7 +367,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   tetap, bukan `FlowDocument`". Tidak ada test yang membuktikan penolakan itu (klaim perilaku WPF dari komentar; **belum diverifikasi** di
   repo ini). Alternatif lain yang dipertimbangkan tidak tercatat di kode, komentar, maupun test.
 - **Keputusan.** `PreviewBuild` memaginasi `FlowDocument` cetak di latar, lalu menulis halaman lewat `XpsDocumentWriter.WriteAsync` ke paket
-  XPS di `MemoryStream` (didaftarkan di `PackageStore`, URI `pack://mdviewer-preview-N.xps`) dan menyerahkan `FixedDocumentSequence` ke
+  XPS di `MemoryStream` (didaftarkan di `PackageStore`, URI `pack://makdon-preview-N.xps`) dan menyerahkan `FixedDocumentSequence` ke
   `DocumentViewer` (`PreviewBuild.cs:152-171, 198`). Yang ditulis adalah `HeaderFooterPaginator` di atas paginator FlowDocument, yaitu
   paginator yang sama dengan jalur Cetak langsung, jadi "yang tampil sama dengan yang tercetak" (komentar `PreviewBuild.cs:13-15`).
   `DocumentViewer` baru diisi pada tahap `Ready` (`PrintPreviewWindow.xaml.cs:166-173`), yaitu sesudah paginasi dan penulisan XPS selesai

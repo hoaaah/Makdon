@@ -1,13 +1,15 @@
 <#
 .SYNOPSIS
-  Membatalkan pendaftaran MdViewer yang dibuat oleh register-file-association.ps1 (HKCU, tanpa admin).
+  Membatalkan pendaftaran Makdon yang dibuat oleh register-file-association.ps1 (HKCU, tanpa admin).
 
 .DESCRIPTION
-  Menghapus ProgID, Applications\MdViewer.exe, Capabilities, entri RegisteredApplications, dan nilai
-  OpenWithProgids yang menunjuk ke MdViewer. Nilai bawaan ekstensi hanya disentuh bila persis menunjuk ke
-  ProgID MdViewer: dipulihkan dari cadangan HKCU\Software\MdViewer\PreviousDefault (dibuat oleh
+  Menghapus ProgID, Applications\Makdon.exe, Capabilities, entri RegisteredApplications, dan nilai
+  OpenWithProgids yang menunjuk ke Makdon. Nilai bawaan ekstensi hanya disentuh bila persis menunjuk ke
+  ProgID Makdon: dipulihkan dari cadangan HKCU\Software\Makdon\PreviousDefault (dibuat oleh
   register-file-association.ps1 -SetDefault), atau dihapus bila tidak ada cadangan.
   Pilihan pengguna di Windows (UserChoice) tidak disentuh.
+  Aplikasi ini sebelumnya bernama MdViewer: sisa pendaftaran lama (ProgID MdViewer.Markdown, Applications\MdViewer.exe,
+  Software\MdViewer) dibersihkan dengan cara yang sama.
 
 .PARAMETER Extensions
   Ekstensi yang dibersihkan (hanya huruf kecil/angka, mis. .md). Bawaan: .md dan .markdown.
@@ -22,9 +24,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$ProgId = 'MdViewer.Markdown'
-$AppName = 'MdViewer'
-$AppExe = 'MdViewer.exe'
+# Identitas pendaftaran: yang sekarang, dan yang lama (aplikasi ini sebelumnya bernama MdViewer) agar sisa
+# pendaftaran lama ikut dibersihkan.
+$Registrations = @(
+    @{ ProgId = 'Makdon.Markdown'; AppName = 'Makdon'; AppExe = 'Makdon.exe' },
+    @{ ProgId = 'MdViewer.Markdown'; AppName = 'MdViewer'; AppExe = 'MdViewer.exe' }
+)
 $classes = 'Software\Classes'
 $Extensions = $Extensions | ForEach-Object { '.' + $_.TrimStart('.').ToLowerInvariant() } | Select-Object -Unique
 foreach ($ext in $Extensions) {
@@ -49,7 +54,7 @@ function Remove-RegistryValue([string]$SubKey, [string]$Name) {
     } finally { $key.Dispose() }
 }
 
-if ($PSCmdlet.ShouldProcess("HKCU\$classes", "Hapus pendaftaran $AppName")) {
+function Remove-Registration([string]$ProgId, [string]$AppName, [string]$AppExe) {
     foreach ($ext in $Extensions) {
         Remove-RegistryValue "$classes\$ext\OpenWithProgids" $ProgId
 
@@ -84,7 +89,7 @@ if ($PSCmdlet.ShouldProcess("HKCU\$classes", "Hapus pendaftaran $AppName")) {
     }
     Remove-RegistryValue 'Software\RegisteredApplications' $AppName
 
-    # Hapus Software\MdViewer bila sudah kosong.
+    # Hapus Software\<AppName> bila sudah kosong.
     $root = [Microsoft.Win32.Registry]::CurrentUser
     $app = $root.OpenSubKey("Software\$AppName")
     if ($null -ne $app) {
@@ -92,12 +97,18 @@ if ($PSCmdlet.ShouldProcess("HKCU\$classes", "Hapus pendaftaran $AppName")) {
         $app.Dispose()
         if ($empty) { $root.DeleteSubKey("Software\$AppName", $false) }
     }
+}
 
-    Add-Type -Namespace MdViewerSetup -Name Shell -MemberDefinition @'
+if ($PSCmdlet.ShouldProcess("HKCU\$classes", "Hapus pendaftaran Makdon (dan sisa pendaftaran lama MdViewer)")) {
+    foreach ($reg in $Registrations) {
+        Remove-Registration $reg.ProgId $reg.AppName $reg.AppExe
+    }
+
+    Add-Type -Namespace MakdonSetup -Name Shell -MemberDefinition @'
 [System.Runtime.InteropServices.DllImport("shell32.dll")]
 public static extern void SHChangeNotify(int wEventId, uint uFlags, System.IntPtr dwItem1, System.IntPtr dwItem2);
 '@
-    [MdViewerSetup.Shell]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+    [MakdonSetup.Shell]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
 
-    Write-Host "Pendaftaran $AppName dihapus dari HKCU."
+    Write-Host "Pendaftaran Makdon dihapus dari HKCU."
 }

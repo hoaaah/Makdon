@@ -1,0 +1,44 @@
+<UserControl x:Class="Makdon.DocumentView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:avalon="http://icsharpcode.net/sharpdevelop/avalonedit"
+             xmlns:local="clr-namespace:Makdon"
+             PreviewMouseWheel="View_PreviewMouseWheel">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="EditorColumn" Width="*" />
+            <ColumnDefinition x:Name="SplitterColumn" Width="Auto" />
+            <ColumnDefinition x:Name="PreviewColumn" Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Grid x:Name="EditorHost" Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <local:FindReplaceBar x:Name="FindBar" Grid.Row="0" Visibility="Collapsed" />
+
+            <avalon:TextEditor x:Name="Editor" Grid.Row="1"
+                               Background="{DynamicResource EditorBackgroundBrush}"
+                               Foreground="{DynamicResource EditorForegroundBrush}"
+                               LineNumbersForeground="{DynamicResource LineNumberBrush}"
+                               FontFamily="{StaticResource MonoFont}" FontSize="14"
+                               ShowLineNumbers="True" WordWrap="True" Padding="8,10,12,10"
+                               HorizontalScrollBarVisibility="Disabled"
+                               VerticalScrollBarVisibility="Auto"
+                               AutomationProperties.Name="Editor Markdown" />
+        </Grid>
+
+        <GridSplitter x:Name="Splitter" Grid.Column="1" Width="7" HorizontalAlignment="Stretch"
+                      AutomationProperties.Name="Pembagi editor dan pratinjau" />
+
+        <FlowDocumentScrollViewer x:Name="Preview" Grid.Column="2"
+                                  IsToolBarVisible="False" Padding="0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  MinZoom="25" MaxZoom="500"
+                                  Background="{DynamicResource PreviewBackgroundBrush}"
+                                  SelectionBrush="{DynamicResource AccentBrush}"
+                                  AutomationProperties.Name="Pratinjau Markdown" />
+    </Grid>
+</UserControl>

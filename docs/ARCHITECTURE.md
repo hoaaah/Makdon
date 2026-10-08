@@ -1,7 +1,7 @@
-# Arsitektur MdViewer
+# Arsitektur Makdon
 
-**Tujuan:** menjelaskan komponen, tanggung jawabnya, alur utama, model thread, dan model state MdViewer.
-**Pembaca:** pengembang yang akan mengubah kode `src/MdViewer`. Untuk alasan di balik keputusan lihat
+**Tujuan:** menjelaskan komponen, tanggung jawabnya, alur utama, model thread, dan model state Makdon.
+**Pembaca:** pengembang yang akan mengubah kode `src/Makdon`. Untuk alasan di balik keputusan lihat
 [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md); untuk batas keamanan lihat [SECURITY.md](SECURITY.md).
 
 Konvensi rujukan: `berkas:baris` relatif terhadap akar repo; nomor baris sesuai kode saat dokumen ini ditulis dan bisa
@@ -9,14 +9,14 @@ bergeser. Pernyataan yang tidak bisa dibuktikan dari kode ditandai "belum diveri
 
 ## 1. Gambaran umum
 
-- Aplikasi WPF .NET 9 (`net9.0-windows`, `WinExe`, Nullable + ImplicitUsings) - `src/MdViewer/MdViewer.csproj:4-12`.
+- Aplikasi WPF .NET 9 (`net9.0-windows`, `WinExe`, Nullable + ImplicitUsings) - `src/Makdon/Makdon.csproj:4-12`.
 - Pustaka pihak ketiga hanya dua: AvalonEdit 6.3.1.120 (editor) dan Markdig.Wpf 0.5.0.1 (parser Markdown + render
-  `FlowDocument`) - `MdViewer.csproj:35-36`.
+  `FlowDocument`) - `Makdon.csproj:35-36`.
 - Satu jendela (`MainWindow`) berisi banyak tab; satu tab = satu `DocumentTab` (model) dengan satu `DocumentView`
   (tampilan: editor + pratinjau + panel cari).
 - Tidak ada `StartupUri`; `App.OnStartup` membuat `MainWindow` sendiri setelah urusan single-instance selesai
-  (`src/MdViewer/App.xaml`, `src/MdViewer/App.xaml.cs:40`).
-- Proyek test melihat tipe `internal` lewat `InternalsVisibleTo("MdViewer.Tests")` (`src/MdViewer/AssemblyInfo.cs:4`).
+  (`src/Makdon/App.xaml`, `src/Makdon/App.xaml.cs:40`).
+- Proyek test melihat tipe `internal` lewat `InternalsVisibleTo("Makdon.Tests")` (`src/Makdon/AssemblyInfo.cs:4`).
 - Cetak punya dua jalur yang berbagi `PageLayout` dan `HeaderFooterPaginator`: Cetak langsung (Ctrl+P, sinkron) dan Pratinjau Cetak
   (Ctrl+Shift+P, modal; halaman disusun async ke paket XPS di memori lalu dicetak dari paket itu). Lihat 4.9 dan 4.10.
 
@@ -33,7 +33,7 @@ bergeser. Pernyataan yang tidak bisa dibuktikan dari kode ditandai "belum diveri
 | `MarkdownEditing` | `MarkdownEditing.cs` | Operasi format Markdown pada `TextDocument` (tebal, miring, kode, heading, daftar, kutipan, tautan, gambar); tiap operasi dibungkus `BeginUpdate` = satu langkah Undo. `Apply(TextEditor, ...)` adalah adaptor ke editor. |
 | `TextFileIO` | `TextFileIO.cs` | Baca byte tanpa mengunci, deteksi/encode encoding, penulisan atomik (`Write`, `WriteBytesAtomic`, fallback `WriteInPlace`), SHA-256 (`Hash`), `ResolveLinkTarget` (symlink). |
 | `FileStamp` | `FileStamp.cs` | `record struct` ukuran + waktu tulis + waktu pengambilan; `IsReliable` (jendela "racy" 2 dtk) dan `SameFileAs`; jalan pintas agar file yang jelas tak berubah tidak dibaca/di-hash ulang. |
-| `AppSettings` (+ `SessionState`, `SessionTab`) | `AppSettings.cs` | Pengaturan JSON di `%APPDATA%\MdViewer\settings.json`: tema, zoom, blokir gambar remote, berkas terakhir, sesi. `Load`/`Save` tidak melempar; `SaveMerged` menggabungkan `RecentFiles` dengan isi file; `Sanitize` merapikan data rusak. |
+| `AppSettings` (+ `SessionState`, `SessionTab`) | `AppSettings.cs` | Pengaturan JSON di `%APPDATA%\Makdon\settings.json`: tema, zoom, blokir gambar remote, berkas terakhir, sesi. `Load`/`Save` tidak melempar; `SaveMerged` menggabungkan `RecentFiles` dengan isi file; `Sanitize` merapikan data rusak. |
 | `SingleInstance` | `SingleInstance.cs` | `Mutex` `Local\` per sesi Windows menentukan instance utama; named pipe (`CurrentUserOnly`) meneruskan path absolut dari peluncuran berikutnya. Tidak pernah melempar; gagal berarti jatuh ke instance baru. |
 | `MarkdownSupport` | `MarkdownSupport.cs` | Dua pipeline Markdig terpisah (`Pipeline` pratinjau, `ExportPipeline` ekspor), `ClassifyUrl`/`UrlKind` (allowlist), `ResolveImageUrls` (pratinjau/cetak), `SanitizeForExport` + `ImageEmbedder` (ekspor), `IsAllowedLocalPath`, `ResolveLinkTarget` (path tautan dokumen, tanpa I/O). |
 | `AnchorHeadingRenderer` | `AnchorHeadingRenderer.cs` | Pengganti `HeadingRenderer` Markdig.Wpf yang menyimpan id heading (slug GitHub) di `Paragraph.Tag` agar pratinjau bisa melompat ke `#anchor` (`DocumentView.FindHeading`). Dipasang di `DocumentView.BuildFlowDocument`. |
@@ -44,7 +44,7 @@ bergeser. Pernyataan yang tidak bisa dibuktikan dari kode ditandai "belum diveri
 | `PrintPreviewWindow` | `PrintPreviewWindow.xaml(.cs)` | Jendela modal: `DocumentViewer` bertema, pilihan orientasi/kertas/margin/kaki halaman (tiap perubahan = `PreviewBuild` baru dari `PrintSource` yang sama), navigasi halaman, zoom, tombol Cetak (`PrintDialog` + `ConfirmPaperMatchesPreview`), dan panel galat (`ShowFailure`). |
 | `ThemeManager` + `AppThemeMode` | `Theming.cs` | Menukar `ResourceDictionary` `Themes/Light.xaml`/`Dark.xaml` di `Application.Resources`, mengikuti pengaturan sistem (HKCU `AppsUseLightTheme` + `SystemEvents.UserPreferenceChanged`), title bar gelap (`DwmSetWindowAttribute`), `LoadDictionary` (dipakai cetak). |
 | `EditorTheme` | `EditorTheme.cs` | Mewarnai definisi highlighting "MarkDown" AvalonEdit dari brush `Syntax*Brush` dan menjaga kontras >= 4,5:1 terhadap latar editor (`EnsureContrast`, rumus WCAG). |
-| `CrashLog` | `CrashLog.cs` | Catatan galat `%LOCALAPPDATA%\MdViewer\crash.log` (batas 512 KB), `IsRecoverable` (galat yang aman dilanjutkan), `ShouldShowDialog` (redam dialog berulang 10 dtk). Menulis log tidak pernah melempar. |
+| `CrashLog` | `CrashLog.cs` | Catatan galat `%LOCALAPPDATA%\Makdon\crash.log` (batas 512 KB), `IsRecoverable` (galat yang aman dilanjutkan), `ShouldShowDialog` (redam dialog berulang 10 dtk). Menulis log tidak pernah melempar. |
 | `ChoiceDialog` + `DialogChoice<T>` | `ChoiceDialog.xaml(.cs)` | Dialog modal bertema dengan tombol berlabel; Esc/X = `cancelValue`. Dipakai untuk semua dialog konflik. |
 | `AppCommands` | `AppCommands.cs` | `RoutedUICommand` khusus aplikasi (zoom, ekspor, pratinjau cetak, cari berikutnya/sebelumnya, tema, format) + `FormatOf`. |
 | Utilitas kecil | `ZoomLevel.cs`, `TextStats.cs`, `EncodingNames.cs`, `MarkdownFiles.cs`, `Converters.cs`, `ViewModeConverter.cs`, `NotNullConverter.cs` | Aturan zoom 50-300%, hitung kata/karakter per potongan 64 KB, label encoding status bar, daftar ekstensi Markdown (`.md .markdown .mdown .mkd .txt`), konverter binding. |
@@ -185,7 +185,7 @@ sequenceDiagram
     participant M as MainWindow
 
     A->>A: pasang handler galat global, ubah argumen jadi path mutlak
-    A->>S: Create() lalu Mutex Local MdViewer.SingleInstance dengan SID pengguna
+    A->>S: Create() lalu Mutex Local Makdon.SingleInstance dengan SID pengguna
     alt mutex baru dibuat (IsPrimary)
         A->>S: StartServer(OnFilesFromOtherInstance)
         S-->>P: Task.Run ServerLoopAsync
@@ -193,7 +193,7 @@ sequenceDiagram
         M->>M: ada argumen: OpenFile tiap file. Tanpa argumen: RestoreSession
     else mutex sudah ada (bukan primary)
         A->>S: AllowForeground lalu TrySendToPrimary(files, 3 dtk)
-        S->>P: pipe dengan nama SID + id sesi Windows, pesan MDVIEWER1 + path
+        S->>P: pipe dengan nama SID + id sesi Windows, pesan MAKDON1 + path
         alt terkirim
             A->>A: Shutdown dan return
         else gagal (timeout atau pipe tidak ada)
@@ -570,7 +570,7 @@ Poin penting:
 Kode: `PreviewBuild.Dispose/ScheduleCleanup/Cleanup` (`PreviewBuild.cs:240-329`), `Guard/Fail` (`:211-238`),
 `PrintPreviewWindow.StartBuild/ShowFailure/ApplyBuildState` (`PrintPreviewWindow.xaml.cs:103-177`).
 
-Paket XPS (`MemoryStream` -> `Package` -> `XpsDocument`, didaftarkan di `PackageStore` dengan URI `pack://mdviewer-preview-N.xps`,
+Paket XPS (`MemoryStream` -> `Package` -> `XpsDocument`, didaftarkan di `PackageStore` dengan URI `pack://makdon-preview-N.xps`,
 `PreviewBuild.cs:160-165`) dipakai `DocumentViewer` lewat URI itu. `DocumentViewer` memuat `PageContent` secara async; menutup paket lebih
 awal membuat pemuatan yang sudah antre melempar `UriFormatException` di dispatcher (komentar `PreviewBuild.cs:291-292`). Karena itu paket
 ditutup hanya setelah dispatcher idle dan hanya setelah penulis XPS benar-benar berhenti:

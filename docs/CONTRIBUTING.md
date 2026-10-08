@@ -1,6 +1,6 @@
 # Panduan Kontribusi
 
-**Tujuan:** cara menyiapkan lingkungan, membangun/menguji/mem-publish MdViewer, konvensi kode, cara menulis test, cara menambah
+**Tujuan:** cara menyiapkan lingkungan, membangun/menguji/mem-publish Makdon, konvensi kode, cara menulis test, cara menambah
 hal-hal umum (tema, perintah, mode tampilan, ekstensi, format toolbar), checklist PR, dan larangan proyek.
 **Pembaca:** kontributor baru dan agen AI yang mengubah kode. Aturan resmi proyek ada di [../CLAUDE.md](../CLAUDE.md); dokumen ini
 merangkum dan menambah langkah praktis. Gambaran arsitektur: [ARCHITECTURE.md](ARCHITECTURE.md). Pengujian: [TESTING.md](TESTING.md).
@@ -8,30 +8,30 @@ merangkum dan menambah langkah praktis. Gambaran arsitektur: [ARCHITECTURE.md](A
 ## 1. Setup
 
 - Windows (WPF) dan **.NET 9 SDK** (README: "Butuh .NET 9 SDK"). Tidak ada dependensi alat lain; paket NuGet dipulihkan otomatis oleh
-  `dotnet build`. Proyek memakai `net9.0-windows` (`src/MdViewer/MdViewer.csproj`), jadi tidak bisa dibangun di Linux/macOS.
+  `dotnet build`. Proyek memakai `net9.0-windows` (`src/Makdon/Makdon.csproj`), jadi tidak bisa dibangun di Linux/macOS.
 - Tidak ditemukan konfigurasi CI atau analyzer/`.editorconfig` di repo; penjaga kualitas saat ini adalah aturan "0 warning" dan test
   (lihat bagian 6).
 
 ```powershell
-dotnet build MdViewer.sln                 # harus 0 warning, 0 error
-dotnet test src/MdViewer.Tests            # xUnit; semua harus hijau
-dotnet run --project src/MdViewer -- file.md
-dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet build Makdon.sln                   # harus 0 warning, 0 error
+dotnet test src/Makdon.Tests              # xUnit; semua harus hijau
+dotnet run --project src/Makdon -- file.md
+dotnet publish src/Makdon -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
 ```
 
-Hasil publish: `src\MdViewer\bin\Release\net9.0-windows\win-x64\publish\MdViewer.exe` (butuh .NET 9 Desktop Runtime di mesin
-tujuan). `RuntimeIdentifier` sengaja tidak dipaksa di csproj agar build/test biasa tetap netral (komentar `MdViewer.csproj:15-19`).
-Properti `<Version>` saat ini `0.1.0` (`MdViewer.csproj:12`), sama dengan rilis awal di [../CHANGELOG.md](../CHANGELOG.md). Ubah keduanya bersama saat rilis.
+Hasil publish: `src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe` (butuh .NET 9 Desktop Runtime di mesin
+tujuan). `RuntimeIdentifier` sengaja tidak dipaksa di csproj agar build/test biasa tetap netral (komentar `Makdon.csproj:15-19`).
+Properti `<Version>` saat ini `0.1.0` (`Makdon.csproj:12`), sama dengan rilis awal di [../CHANGELOG.md](../CHANGELOG.md). Ubah keduanya bersama saat rilis.
 
 ## 2. Struktur folder
 
 ```text
-MdViewer.sln
+Makdon.sln
 CLAUDE.md, README.md, CHANGELOG.md
 docs/                       dokumentasi pengembangan (indeks: docs/README.md)
 scripts/                    register/unregister-file-association.ps1 (HKCU), generate-icon.ps1
 .claude/agents/             sub-agent proyek (kuli, tyas, kurang-kerjaan, pak-bos)
-src/MdViewer/               aplikasi WPF
+src/Makdon/                 aplikasi WPF
     App.xaml(.cs)           titik masuk, single-instance, penangan galat global
     MainWindow.xaml(.cs)    tab, dialog, sesi, menu, ekspor, cetak
     DocumentTab.cs          model dokumen (teks, path, encoding, watcher, simpan)
@@ -44,7 +44,7 @@ src/MdViewer/               aplikasi WPF
     Theming.cs, EditorTheme.cs, Themes/{Light,Dark,Controls,Preview}.xaml
     AppCommands.cs, ChoiceDialog.xaml(.cs), Converters.cs, ViewModeConverter.cs, NotNullConverter.cs
     ZoomLevel.cs, TextStats.cs, EncodingNames.cs, MarkdownFiles.cs, Assets/app.ico
-src/MdViewer.Tests/         xUnit
+src/Makdon.Tests/           xUnit
     Support/                WpfHost.cs (+ DispatcherErrors, FailOnUnexpectedDispatcherErrorsAttribute), AssemblyInfo.cs,
                             PrintTestKit.cs, TempDir.cs, TestLogRedirect.cs
     *Tests.cs               peta berkas -> area ada di TESTING.md
@@ -67,7 +67,7 @@ Dari CLAUDE.md, dilengkapi pola yang konsisten terlihat di kode:
   [ADR-25](DESIGN-DECISIONS.md#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle)) ada komentarnya.
 - **Helper lapisan bawah yang "tidak pernah melempar"** (`AppSettings.Load/Save`, `CrashLog.Write`, `SingleInstance`) menyatakannya di
   ringkasan XML; pertahankan sifat itu saat mengubahnya.
-- Gaya yang terlihat: namespace file-scoped (`namespace MdViewer;`), indentasi 4 spasi, field privat tanpa awalan `_`, kelas
+- Gaya yang terlihat: namespace file-scoped (`namespace Makdon;`), indentasi 4 spasi, field privat tanpa awalan `_`, kelas
   `sealed`/`static` bila memungkinkan, `internal` untuk yang tak perlu publik (tersedia untuk test lewat `InternalsVisibleTo`).
   Tidak ada aturan tertulis; ikuti berkas di sekitar perubahan.
 - **Penyimpanan file** selalu lewat `TextFileIO.Write` (atomik, mempertahankan encoding/BOM). **Pembukaan dokumen** hanya lewat
@@ -77,7 +77,7 @@ Dari CLAUDE.md, dilengkapi pola yang konsisten terlihat di kode:
 
 ## 4. Cara menulis test
 
-Kerangka: xUnit 2.9.2 + `Microsoft.NET.Test.Sdk` 17.12.0 + coverlet.collector (`MdViewer.Tests.csproj`), target
+Kerangka: xUnit 2.9.2 + `Microsoft.NET.Test.Sdk` 17.12.0 + coverlet.collector (`Makdon.Tests.csproj`), target
 `net9.0-windows`, `UseWPF`. `Xunit` dan `System.IO` sudah `<Using>` global.
 
 ### 4.1 Pola yang dipakai
@@ -85,10 +85,10 @@ Kerangka: xUnit 2.9.2 + `Microsoft.NET.Test.Sdk` 17.12.0 + coverlet.collector (`
 | Kebutuhan | Pakai | Catatan |
 | --- | --- | --- |
 | Menyentuh WPF (`DocumentTab`, `DocumentView`, `FindReplaceBar`, `ChoiceDialog`, `ThemeManager.Apply`, `TextEditor`; tipe cetak: `PrintPreviewWindow`, `PreviewBuild`, `HeaderFooterPaginator`, `FlowDocument` hasil `PrintService.CreateDocument`, `DocumentViewer`, `FixedDocumentSequence`, `PrintTicket`) | `WpfHost.Instance.Run(...)` + `[Collection("Wpf")]` pada kelas | `WpfHost` = satu thread STA dengan `Dispatcher` dan satu `App` (`ShutdownMode.OnExplicitShutdown`, resource tema dimuat, `OnStartup` tidak dipanggil). Koleksi `Wpf` mematikan paralelisasi (`MarkdownEditingTests.cs:942`). `DocumentTab` menangkap `Dispatcher.CurrentDispatcher`, jadi **buat di dalam `Run`**; `PreviewBuild` juga (`Dispatcher.CurrentDispatcher` di field-nya). Tipe non-WPF murni (`PageLayout.For`/`MarginOf`/`FromPrintableArea`, `PrintPreviewWindow.TicketMatches`/`ApplyTicket` pada `PrintTicket` terpisah) tidak butuh `Run`, tetapi kelas yang memuatnya di repo ini tetap `[Collection("Wpf")]`. |
-| Test cetak: dokumen contoh, halaman kecil, menunggu tahap, membaca teks halaman XPS | `Support/PrintTestKit` (`using static MdViewer.Tests.Support.PrintTestKit;`) | `Small` (360 x 420, margin 24), `Sample`, `Paragraphs(n)` (banyak halaman `Small`), `Pages(n)` (banyak halaman A4), `StartBuild`, `WaitForEnd`/`WaitForPaginated` (memakai `UiPump.Until` dengan batas `Patience` 15 dtk), `GlyphTexts` (teks halaman XPS), `FooterTexts` (teks kaki halaman), `Paginator`. |
+| Test cetak: dokumen contoh, halaman kecil, menunggu tahap, membaca teks halaman XPS | `Support/PrintTestKit` (`using static Makdon.Tests.Support.PrintTestKit;`) | `Small` (360 x 420, margin 24), `Sample`, `Paragraphs(n)` (banyak halaman `Small`), `Pages(n)` (banyak halaman A4), `StartBuild`, `WaitForEnd`/`WaitForPaginated` (memakai `UiPump.Until` dengan batas `Patience` 15 dtk), `GlyphTexts` (teks halaman XPS), `FooterTexts` (teks kaki halaman), `Paginator`. |
 | Menguji bahwa callback dispatcher melempar (galat yang memang diharapkan) | `using (var scope = WpfHost.ExpectUnhandled()) { ... }` lalu periksa `scope.Errors` | Tanpa scope, galat yang lolos ke dispatcher menggagalkan test lewat `[assembly: FailOnUnexpectedDispatcherErrors]` (`Support/AssemblyInfo.cs`). Untuk menegaskan "tidak ada galat lolos": `var before = WpfHost.Unhandled.Count; ...; Assert.Equal(before, WpfHost.Unhandled.Count);`. Lihat [TESTING.md](TESTING.md#thread-sta-dan-wpfhost). |
-| File/folder sementara | `TempDir` (`new TempDir()`, `File`, `WriteText`, `WriteBytes`, `Entries`; `Dispose` menghapus) | Lokasi `%TEMP%\MdViewer.Tests\<guid>`. Pakai `Entries()` untuk menegaskan tidak ada sisa `~md*.tmp`. |
-| Mengalihkan `crash.log` | `TestLogRedirect` (`[ModuleInitializer]`) | Otomatis berlaku untuk seluruh assembly test; tidak perlu dipanggil. Log test: `%TEMP%\MdViewer.Tests\crash-<pid>.log`. |
+| File/folder sementara | `TempDir` (`new TempDir()`, `File`, `WriteText`, `WriteBytes`, `Entries`; `Dispose` menghapus) | Lokasi `%TEMP%\Makdon.Tests\<guid>`. Pakai `Entries()` untuk menegaskan tidak ada sisa `~md*.tmp`. |
+| Mengalihkan `crash.log` | `TestLogRedirect` (`[ModuleInitializer]`) | Otomatis berlaku untuk seluruh assembly test; tidak perlu dipanggil. Log test: `%TEMP%\Makdon.Tests\crash-<pid>.log`. |
 | Menunggu event async/timer di dalam satu test STA | `UiPump.For(TimeSpan)` / `UiPump.Until(cond, timeout)` | Didefinisikan di `DocumentViewLifecycleTests.cs:14-41`; memompa dispatcher (`DispatcherFrame`). `UiPump.IsTimerEnabled(owner, "namaField")` membaca **field privat** lewat refleksi (`statsTimer`, `renderTimer`, `queryTimer`, `refreshTimer`): jangan ganti nama field itu tanpa memperbarui test. |
 | Single-instance | `SingleInstance.Create("test-" + Guid.NewGuid().ToString("N"))` | Scope unik supaya mutex/pipe tidak bentrok dengan aplikasi asli atau test lain. |
 | Pengaturan | `AppSettings.Load(path)`, `Save(path)`, `SaveMerged(path)` dengan path di `TempDir` | **Jangan** memakai `AppSettings.DefaultPath`/`Load()` tanpa argumen. |
@@ -148,7 +148,7 @@ public class ContohTests : IDisposable
    dengan batas 5 dtk). Itu pengecualian; jangan menambah yang baru bila ada pilihan deterministik.
 4. **Uji perilaku, bukan implementasi** (arahan agen `kurang-kerjaan`): cakup jalur normal, edge case, dan error path (file
    terkunci lewat `FileShare.None`, folder tak ada, direktori sebagai target, input kosong/null).
-5. **Tipe yang test butuhkan harus bisa dijangkau:** `internal` terlihat karena `InternalsVisibleTo("MdViewer.Tests")`
+5. **Tipe yang test butuhkan harus bisa dijangkau:** `internal` terlihat karena `InternalsVisibleTo("Makdon.Tests")`
    (`AssemblyInfo.cs:4`). `x:Name` XAML (mis. `FindBox`, `CountText`, `ReplaceRow`, `ButtonPanel`, `MessageText`) dipakai test; mengubah
    nama/hapus mempengaruhi test. Jendela Pratinjau Cetak sama: test mencari `Viewer`, `PageBox`, `PrintButton`, `BusyPanel`, `BusyText`,
    `BusyDetail`, `FooterCheck`, `*Button` (orientasi/kertas/margin/navigasi/zoom) lewat `FindName`. Beberapa test cetak juga membaca
@@ -187,7 +187,7 @@ Brush semantik berada di `Themes/Light.xaml` dan `Themes/Dark.xaml` (masing-masi
    saat ini):
 
    ```bash
-   diff <(grep -o 'x:Key="[^"]*"' src/MdViewer/Themes/Light.xaml) <(grep -o 'x:Key="[^"]*"' src/MdViewer/Themes/Dark.xaml) && echo SAMA
+   diff <(grep -o 'x:Key="[^"]*"' src/Makdon/Themes/Light.xaml) <(grep -o 'x:Key="[^"]*"' src/Makdon/Themes/Dark.xaml) && echo SAMA
    ```
 
 6. Pratinjau: gaya `Styles.*` Markdig.Wpf ditimpa di `Themes/Preview.xaml` (warna lewat brush `Preview*`). Gaya kontrol di `Controls.xaml`.
@@ -249,8 +249,8 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
 
 ## 6. Checklist PR
 
-- [ ] `dotnet build MdViewer.sln` -> **0 warning, 0 error**.
-- [ ] `dotnet test src/MdViewer.Tests` -> semua hijau (jalankan sungguhan; jangan menyatakan hijau tanpa menjalankan).
+- [ ] `dotnet build Makdon.sln` -> **0 warning, 0 error**.
+- [ ] `dotnet test src/Makdon.Tests` -> semua hijau (jalankan sungguhan; jangan menyatakan hijau tanpa menjalankan).
 - [ ] Test baru untuk perilaku baru: jalur normal, edge case, error path. Tidak menyentuh `%APPDATA%`/registri/`crash.log` asli.
 - [ ] Perubahan tema: kunci Light = Dark (periksa dengan perintah di atas); `DynamicResource` bukan `StaticResource`.
 - [ ] Alur yang menulis file memakai `TextFileIO.Write`; yang membuka dokumen memakai `MainWindow.OpenFile`.

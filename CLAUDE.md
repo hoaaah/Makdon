@@ -1,19 +1,19 @@
-# MdViewer
+# Makdon
 
 Aplikasi WPF .NET 9 (Windows) untuk menyunting dan melihat pratinjau Markdown. Lihat `README.md` untuk fitur dan pemakaian, dan `docs/README.md` untuk dokumentasi pengembangan (arsitektur, keputusan desain, keamanan, pengujian).
 
 ## Perintah
 
 ```powershell
-dotnet build MdViewer.sln                 # harus 0 warning, 0 error
-dotnet test src/MdViewer.Tests            # xUnit; semua harus hijau
-dotnet run --project src/MdViewer -- file.md
-dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet build Makdon.sln                   # harus 0 warning, 0 error
+dotnet test src/Makdon.Tests              # xUnit; semua harus hijau
+dotnet run --project src/Makdon -- file.md
+dotnet publish src/Makdon -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
 ```
 
 ## Struktur
 
-- `src/MdViewer` - aplikasi. Titik masuk `App.xaml.cs` (single-instance, penangan galat global) lalu `MainWindow`.
+- `src/Makdon` - aplikasi. Titik masuk `App.xaml.cs` (single-instance, penangan galat global) lalu `MainWindow`.
   - `MainWindow` - tab, dialog (konflik, simpan, ukuran file), sesi/settings, menu. Satu `DocumentTab` per dokumen.
     `ChoiceDialog` - dialog kecil bertema dengan tombol berlabel (dipakai dialog konflik; bukan MessageBox Ya/Tidak/Batal).
   - `DocumentTab` - model dokumen: teks, path, encoding, hash/stempel file di disk, watcher perubahan eksternal, simpan.
@@ -26,7 +26,7 @@ dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:Publ
     Cetak (Ctrl+P) dan Pratinjau Cetak (Ctrl+Shift+P): snapshot teks tab -> parse -> FlowDocument cetak tema Terang -> paginasi + kaki halaman ->
     halaman XPS di memori untuk `DocumentViewer`; `PreviewBuild.Guard` menangkap semua galat, paket XPS dibersihkan setelah dispatcher idle.
   - `Themes/` - kamus warna Light/Dark dan gaya kontrol.
-- `src/MdViewer.Tests` - xUnit. Test yang menyentuh WPF berjalan lewat `Support/WpfHost` (satu thread STA) dengan
+- `src/Makdon.Tests` - xUnit. Test yang menyentuh WPF berjalan lewat `Support/WpfHost` (satu thread STA) dengan
   `[Collection("Wpf")]`; `Support/TempDir` untuk file sementara.
 - `scripts/` - registrasi asosiasi file (HKCU, jangan dijalankan tanpa `-WhatIf` dulu) dan pembuat ikon.
 
@@ -52,7 +52,7 @@ dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:Publ
   Buka, seret-lepas, Berkas Terakhir) - lewat `OpenUserFile`; sesudahnya sesi disimpan seperti biasa.
 - Cetak/Pratinjau Cetak: dokumen cetak tidak boleh memuat path lokal atau dokumen galat (jalur cetak melempar, `throwOnFailure`); test cetak tanpa
   printer fisik atau dialog sungguhan (`ShowPrintDialogForTests`), dan galat dispatcher yang diharapkan dibungkus `WpfHost.ExpectUnhandled()`.
-- Galat I/O yang bisa dipulihkan ditangkap dan ditampilkan ke pengguna; galat tak terduga dicatat `CrashLog` (`%LOCALAPPDATA%\MdViewer\crash.log`).
+- Galat I/O yang bisa dipulihkan ditangkap dan ditampilkan ke pengguna; galat tak terduga dicatat `CrashLog` (`%LOCALAPPDATA%\Makdon\crash.log`).
 - Test tidak boleh menyentuh/menulis `%APPDATA%`, `%LOCALAPPDATA%`, dan registri (membaca HKCU Personalize untuk tema diperbolehkan); crash.log pengguna tidak boleh tersentuh (log sudah dialihkan di `TestLogRedirect`); `SingleInstance.Create(scope)`
   memakai scope unik di test. Jangan menjalankan skrip registri sungguhan.
 - Jangan commit atau push kecuali diminta.
