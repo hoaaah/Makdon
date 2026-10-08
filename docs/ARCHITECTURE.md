@@ -9,13 +9,13 @@ bergeser. Pernyataan yang tidak bisa dibuktikan dari kode ditandai "belum diveri
 
 ## 1. Gambaran umum
 
-- Aplikasi WPF .NET 9 (`net9.0-windows`, `WinExe`, Nullable + ImplicitUsings) - `src/Makdon/Makdon.csproj:4-12`.
+- Aplikasi WPF .NET 10 (`net10.0-windows`, `WinExe`, Nullable + ImplicitUsings) - `src/Makdon/Makdon.csproj:5`.
 - Pustaka pihak ketiga hanya dua: AvalonEdit 6.3.1.120 (editor) dan Markdig.Wpf 0.5.0.1 (parser Markdown + render
-  `FlowDocument`) - `Makdon.csproj:35-36`.
+  `FlowDocument`) - `Makdon.csproj:45-46`.
 - Satu jendela (`MainWindow`) berisi banyak tab; satu tab = satu `DocumentTab` (model) dengan satu `DocumentView`
   (tampilan: editor + pratinjau + panel cari).
 - Tidak ada `StartupUri`; `App.OnStartup` membuat `MainWindow` sendiri setelah urusan single-instance selesai
-  (`src/Makdon/App.xaml`, `src/Makdon/App.xaml.cs:40`).
+  (`src/Makdon/App.xaml`, `src/Makdon/App.xaml.cs:42`).
 - Proyek test melihat tipe `internal` lewat `InternalsVisibleTo("Makdon.Tests")` (`src/Makdon/AssemblyInfo.cs:4`).
 - Cetak punya dua jalur yang berbagi `PageLayout` dan `HeaderFooterPaginator`: Cetak langsung (Ctrl+P, sinkron) dan Pratinjau Cetak
   (Ctrl+Shift+P, modal; halaman disusun async ke paket XPS di memori lalu dicetak dari paket itu). Lihat 4.9 dan 4.10.
@@ -24,8 +24,8 @@ bergeser. Pernyataan yang tidak bisa dibuktikan dari kode ditandai "belum diveri
 
 | Komponen | Berkas | Tanggung jawab |
 | --- | --- | --- |
-| `App` | `App.xaml(.cs)` | Titik masuk. Memasang penangan galat global (`DispatcherUnhandledException`, `AppDomain.UnhandledException`), mengubah argumen jadi path mutlak, memanggil `SingleInstance`, membuat `MainWindow`, menerima kiriman file dari instance lain (`OnFilesFromOtherInstance`), memutuskan galat dipulihkan atau fatal (`OnDispatcherUnhandledException`). |
-| `MainWindow` | `MainWindow.xaml(.cs)` | Orkestrator UI: koleksi tab, menu/toolbar/pintasan (`CommandBinding`), dialog (buka/simpan, konfirmasi ukuran file, konflik), sesi dan berkas terakhir, zoom, tema, seret-lepas, ekspor HTML, Cetak langsung (`Print_Executed`, Ctrl+P) dan membuka Pratinjau Cetak modal (`PrintPreview_Executed`, Ctrl+Shift+P). Satu-satunya jalur membuka dokumen: `OpenFile`. Memegang antrean konflik (`conflictQueue`, `conflictPromptOpen`) dan `preserveStoredSession`. |
+| `App` | `App.xaml(.cs)` | Titik masuk. Memasang penangan galat global (`DispatcherUnhandledException`, `AppDomain.UnhandledException`), mengubah argumen jadi path mutlak, memanggil `SingleInstance`, membuat `MainWindow`, menerima kiriman file dari instance lain (`OnFilesFromOtherInstance`), memutuskan galat dipulihkan atau fatal (`OnDispatcherUnhandledException`). Mode terpasang: memanggil `InstallerMutex.Acquire` (`App.xaml.cs:23`); scope single-instance diambil dari `AppPaths.Current.SingleInstanceScope` (`App.xaml.cs:24`). |
+| `MainWindow` | `MainWindow.xaml(.cs)` | Orkestrator UI: koleksi tab, menu/toolbar/pintasan (`CommandBinding`), dialog (buka/simpan, konfirmasi ukuran file, konflik), sesi dan berkas terakhir, zoom, tema, seret-lepas, ekspor HTML, Cetak langsung (`Print_Executed`, Ctrl+P) dan membuka Pratinjau Cetak modal (`PrintPreview_Executed`, Ctrl+Shift+P). Satu-satunya jalur membuka dokumen: `OpenFile`. Memegang antrean konflik (`conflictQueue`, `conflictPromptOpen`) dan `preserveStoredSession`. Mode portable saja: menu Berkas > Integrasi Explorer (`FileAssociation`) dan pemeriksaan startup (`RunPortableStartupChecks`, dijadwalkan dari `ContentRendered` di prioritas `ApplicationIdle`). Bantuan > Tentang Makdon (`About_Click`) untuk semua mode. |
 | `DocumentTab` | `DocumentTab.cs` | Model satu dokumen: `TextDocument` (+ `UndoStack`), path, `Encoding`, `IsLossyDecoded`, hash/stempel file di disk (`diskHash`, `diskStamp`, `pendingHash`, `pendingStamp`), `FileSystemWatcher`, `SaveTo`, `Reload`, `CheckExternalChange`, `ExportHtml`. Memuat enum `ViewMode`, `SaveConflictChoice`, dan `ExternalChangeException`. |
 | `DocumentView` | `DocumentView.xaml(.cs)` | Tampilan satu tab: editor AvalonEdit, pratinjau `FlowDocumentScrollViewer`, `FindReplaceBar`; debounce + parse latar + pengecekan generasi untuk render pratinjau; sinkron scroll; statistik kata; zoom; tema editor; penanganan klik tautan; `Dispose()` menghentikan timer. Sisi cetak: `CapturePrintSnapshot` (salinan teks + folder dokumen + flag blokir remote + judul), `BuildPrintDocument` (dokumen tema Terang; varian statis `internal` dari snapshot atau dari AST), `ParsePrintSnapshot`, dan `CreateFlowDocument(throwOnFailure)`; juga meneruskan perintah `Print` dari panel `Preview` ke jalur jendela (lihat 4.9). Memegang flag statis `BlockRemoteImages`. |
 | `FindReplaceBar` + `SearchResultsRenderer` | `FindReplaceBar.xaml(.cs)` | Panel cari/ganti inline (satu per `DocumentView`), debounce input 250 ms dan refresh 150 ms, penanda hasil digambar `SearchResultsRenderer` (`IBackgroundRenderer`), Ganti Semua sebagai satu Undo. Mencegah pola regex yang sudah kena batas waktu dijalankan ulang (`timedOutKey`). |
@@ -33,8 +33,13 @@ bergeser. Pernyataan yang tidak bisa dibuktikan dari kode ditandai "belum diveri
 | `MarkdownEditing` | `MarkdownEditing.cs` | Operasi format Markdown pada `TextDocument` (tebal, miring, kode, heading, daftar, kutipan, tautan, gambar); tiap operasi dibungkus `BeginUpdate` = satu langkah Undo. `Apply(TextEditor, ...)` adalah adaptor ke editor. |
 | `TextFileIO` | `TextFileIO.cs` | Baca byte tanpa mengunci, deteksi/encode encoding, penulisan atomik (`Write`, `WriteBytesAtomic`, fallback `WriteInPlace`), SHA-256 (`Hash`), `ResolveLinkTarget` (symlink). |
 | `FileStamp` | `FileStamp.cs` | `record struct` ukuran + waktu tulis + waktu pengambilan; `IsReliable` (jendela "racy" 2 dtk) dan `SameFileAs`; jalan pintas agar file yang jelas tak berubah tidak dibaca/di-hash ulang. |
-| `AppSettings` (+ `SessionState`, `SessionTab`) | `AppSettings.cs` | Pengaturan JSON di `%APPDATA%\Makdon\settings.json`: tema, zoom, blokir gambar remote, berkas terakhir, sesi. `Load`/`Save` tidak melempar; `SaveMerged` menggabungkan `RecentFiles` dengan isi file; `Sanitize` merapikan data rusak. |
-| `SingleInstance` | `SingleInstance.cs` | `Mutex` `Local\` per sesi Windows menentukan instance utama; named pipe (`CurrentUserOnly`) meneruskan path absolut dari peluncuran berikutnya. Tidak pernah melempar; gagal berarti jatuh ke instance baru. |
+| `AppSettings` (+ `SessionState`, `SessionTab`) | `AppSettings.cs` | Pengaturan JSON di `%APPDATA%\Makdon\settings.json`: tema, zoom, blokir gambar remote, berkas terakhir, sesi. `Load`/`Save` tidak melempar; `SaveMerged` menggabungkan `RecentFiles` dengan isi file; `Sanitize` merapikan data rusak. Lokasinya dari `AppPaths.SettingsPath` (`%APPDATA%\Makdon\` atau `<folder exe>\data\` untuk portable; `AppSettings.cs:59`). |
+| `SingleInstance` | `SingleInstance.cs` | `Mutex` `Local\` per sesi Windows menentukan instance utama; named pipe (`CurrentUserOnly`) meneruskan path absolut dari peluncuran berikutnya. Tidak pernah melempar; gagal berarti jatuh ke instance baru. Parameter `scope` memisahkan nama mutex dan pipe (kosong untuk terpasang; hash folder exe untuk portable, `SingleInstance.cs:41-44`). |
+| `AppPaths` | `AppPaths.cs` | Mode terpasang/portable: portable bila berkas `Makdon.portable` ada di samping exe (`Detect`, `AppPaths.cs:60-65`). Menyediakan `SettingsPath`, `CrashLogPath`, `SingleInstanceScope` (hash folder exe, hanya portable), dan `IsDataDirectoryWritable` (uji tulis; membuat `data\` bila perlu). `Current` diisi sekali saat startup. Folder dan penguji penanda bisa disuntik untuk test. |
+| `AppInfo` | `AppInfo.cs` | Konstanta identitas: `InstallerAppId` (GUID Inno; tidak boleh berubah), nama mutex installer, `ReleasesUrl`, `LicenseName`, dan `Version` (`InformationalVersion` tanpa akhiran `+hash`). |
+| `InstallerMutex` | `InstallerMutex.cs` | Membuat mutex bernama tetap `Makdon.AppMutex` (lokal dan `Global\`) yang diperiksa installer/uninstaller. Hanya mode terpasang; dipegang sepanjang proses; galat diabaikan. |
+| `IRegistryStore` + `WindowsRegistryStore` | `RegistryStore.cs` | Seam baca/tulis registri untuk `FileAssociation`. Implementasi nyata selalu view 64-bit (HKCU/HKLM). Test memakai `FakeRegistryStore`. |
+| `FileAssociation` (+ `AssociationStatus`, `RegistrationKind`, `RegisterResult`, `UnregisterResult`, `StartupIssue`) | `FileAssociation.cs` | Pendaftaran "Buka dengan" mode portable di HKCU (tabel registri `DISTRIBUTION.md` 4.1). `FindInstallation` (kunci Inno `_is1` di HKCU/HKLM), `GetStatus` (klasifikasi exe yang terdaftar), `Register` (menolak bila terpasang; tanya bila exe lain), `Unregister` (hanya milik exe ini), `CheckStartup`. Memanggil `SHChangeNotify` setelah menulis. |
 | `MarkdownSupport` | `MarkdownSupport.cs` | Dua pipeline Markdig terpisah (`Pipeline` pratinjau, `ExportPipeline` ekspor), `ClassifyUrl`/`UrlKind` (allowlist), `ResolveImageUrls` (pratinjau/cetak), `SanitizeForExport` + `ImageEmbedder` (ekspor), `IsAllowedLocalPath`, `ResolveLinkTarget` (path tautan dokumen, tanpa I/O). |
 | `AnchorHeadingRenderer` | `AnchorHeadingRenderer.cs` | Pengganti `HeadingRenderer` Markdig.Wpf yang menyimpan id heading (slug GitHub) di `Paragraph.Tag` agar pratinjau bisa melompat ke `#anchor` (`DocumentView.FindHeading`). Dipasang di `DocumentView.BuildFlowDocument`. |
 | `HtmlExporter` | `HtmlExporter.cs` | Ekspor ke satu file HTML mandiri: parse dengan `ExportPipeline`, `SanitizeForExport`, render, template CSS tertanam, tulis atomik UTF-8 tanpa BOM. |
@@ -44,7 +49,7 @@ bergeser. Pernyataan yang tidak bisa dibuktikan dari kode ditandai "belum diveri
 | `PrintPreviewWindow` | `PrintPreviewWindow.xaml(.cs)` | Jendela modal: `DocumentViewer` bertema, pilihan orientasi/kertas/margin/kaki halaman (tiap perubahan = `PreviewBuild` baru dari `PrintSource` yang sama), navigasi halaman, zoom, tombol Cetak (`PrintDialog` + `ConfirmPaperMatchesPreview`), dan panel galat (`ShowFailure`). |
 | `ThemeManager` + `AppThemeMode` | `Theming.cs` | Menukar `ResourceDictionary` `Themes/Light.xaml`/`Dark.xaml` di `Application.Resources`, mengikuti pengaturan sistem (HKCU `AppsUseLightTheme` + `SystemEvents.UserPreferenceChanged`), title bar gelap (`DwmSetWindowAttribute`), `LoadDictionary` (dipakai cetak). |
 | `EditorTheme` | `EditorTheme.cs` | Mewarnai definisi highlighting "MarkDown" AvalonEdit dari brush `Syntax*Brush` dan menjaga kontras >= 4,5:1 terhadap latar editor (`EnsureContrast`, rumus WCAG). |
-| `CrashLog` | `CrashLog.cs` | Catatan galat `%LOCALAPPDATA%\Makdon\crash.log` (batas 512 KB), `IsRecoverable` (galat yang aman dilanjutkan), `ShouldShowDialog` (redam dialog berulang 10 dtk). Menulis log tidak pernah melempar. |
+| `CrashLog` | `CrashLog.cs` | Catatan galat `%LOCALAPPDATA%\Makdon\crash.log` (batas 512 KB), `IsRecoverable` (galat yang aman dilanjutkan), `ShouldShowDialog` (redam dialog berulang 10 dtk). Menulis log tidak pernah melempar. Lokasinya dari `AppPaths.CrashLogPath` (`CrashLog.cs:25`; portable: `data\crash.log`). |
 | `ChoiceDialog` + `DialogChoice<T>` | `ChoiceDialog.xaml(.cs)` | Dialog modal bertema dengan tombol berlabel; Esc/X = `cancelValue`. Dipakai untuk semua dialog konflik. |
 | `AppCommands` | `AppCommands.cs` | `RoutedUICommand` khusus aplikasi (zoom, ekspor, pratinjau cetak, cari berikutnya/sebelumnya, tema, format) + `FormatOf`. |
 | Utilitas kecil | `ZoomLevel.cs`, `TextStats.cs`, `EncodingNames.cs`, `MarkdownFiles.cs`, `Converters.cs`, `ViewModeConverter.cs`, `NotNullConverter.cs` | Aturan zoom 50-300%, hitung kata/karakter per potongan 64 KB, label encoding status bar, daftar ekstensi Markdown (`.md .markdown .mdown .mkd .txt`), konverter binding. |
@@ -87,6 +92,10 @@ flowchart LR
         PL["PrintLayout.cs: PageLayout, PrintSnapshot, PrintSource, PrintService"]
         HF["HeaderFooterPaginator"]
         PB["PreviewBuild"]
+        AP["AppPaths"]
+        FA["FileAssociation"]
+        RS["IRegistryStore (WindowsRegistryStore)"]
+        IM["InstallerMutex"]
     end
 
     subgraph Ext["Pihak luar"]
@@ -98,9 +107,13 @@ flowchart LR
         DISK[("Disk")]
         XPS[("XPS di memori: XpsDocumentWriter, PackageStore")]
         PD[("PrintDialog + driver printer")]
+        REG2[("Registry HKCU/HKLM (asosiasi 'Buka dengan')")]
+        MTX[("Mutex Makdon.AppMutex (dibaca installer)")]
     end
 
     App --> SI
+    App --> AP
+    App --> IM
     App --> MW
     App --> CL
     App --> TM
@@ -136,6 +149,15 @@ flowchart LR
     AH --> MD
     AS --> IO
     AS --> TM
+    AS --> AP
+    CL --> AP
+    MW --> AP
+    MW --> FA
+    FA --> RS
+    FA --> AP
+    RS --> REG2
+    IM --> AP
+    IM --> MTX
     TM --> ET
     TM --> REG
     IO --> DISK
@@ -168,13 +190,13 @@ Catatan arah dependensi:
   (`PrintLayout.cs:99,121,133`). `PrintPreviewWindow` dan `PreviewBuild` tidak menyentuh `DocumentTab`/`DocumentView`: yang mereka pegang
   hanya `PrintSnapshot`, sehingga menutup atau mengedit tab tidak mengubah pratinjau yang sedang terbuka.
 - Pratinjau (`PreviewBuild`) dan Cetak langsung (`PrintService.Print`) memakai `PageLayout.Apply` dan `PrintService.CreatePaginator` yang
-  sama, jadi paginasi dan kaki halamannya sama (`PrintLayout.cs:73,142`; `MainWindow.xaml.cs:593-594`).
+  sama, jadi paginasi dan kaki halamannya sama (`PrintLayout.cs:73,142`; `MainWindow.xaml.cs:755-756`).
 
 ## 4. Alur utama
 
 ### 4.1 Startup dan single-instance
 
-Kode: `App.xaml.cs:11-45`, `SingleInstance.cs:41-58, 85-133, 163-201`, `MainWindow.xaml.cs:36-60`.
+Kode: `App.xaml.cs:11-47`, `SingleInstance.cs:41-58, 85-133, 163-201`, `MainWindow.xaml.cs:37-62`, `AppPaths.cs:67-75`, `InstallerMutex.cs:12-23`.
 
 ```mermaid
 sequenceDiagram
@@ -185,12 +207,14 @@ sequenceDiagram
     participant M as MainWindow
 
     A->>A: pasang handler galat global, ubah argumen jadi path mutlak
-    A->>S: Create() lalu Mutex Local Makdon.SingleInstance dengan SID pengguna
+    A->>A: InstallerMutex.Acquire(AppPaths.Current), hanya mode terpasang
+    A->>S: Create(scope) lalu Mutex Local Makdon.SingleInstance.SID[.scope]
     alt mutex baru dibuat (IsPrimary)
         A->>S: StartServer(OnFilesFromOtherInstance)
         S-->>P: Task.Run ServerLoopAsync
         A->>M: new MainWindow(files) lalu Show
         M->>M: ada argumen: OpenFile tiap file. Tanpa argumen: RestoreSession
+        M->>M: portable saja: ContentRendered lalu ApplicationIdle, cek folder data dan pendaftaran (FileAssociation.CheckStartup)
     else mutex sudah ada (bukan primary)
         A->>S: AllowForeground lalu TrySendToPrimary(files, 3 dtk)
         S->>P: pipe dengan nama SID + id sesi Windows, pesan MAKDON1 + path
@@ -211,12 +235,16 @@ Hal yang perlu diketahui:
 - Bila mutex tidak bisa dibuat, `Create` mengembalikan `IsPrimary = true` tanpa mutex; `StartServer` lalu tidak berbuat apa-apa
   karena `mutex is null` (`SingleInstance.cs:56, 87`). Aplikasi tetap jalan, hanya tanpa single-instance.
 - `window.Closed += singleInstance.Dispose` didaftarkan setelah `MainWindow` mendaftarkan `Window_Closed` sendiri, sehingga sesi
-  disimpan dulu baru server berhenti (`App.xaml.cs:41-43`, `MainWindow.xaml.cs:54`).
-- Instance utama yang sedang menutup mengabaikan kiriman file (`closing`/`closed`, `MainWindow.xaml.cs:65`).
+  disimpan dulu baru server berhenti (`App.xaml.cs:43-45`, `MainWindow.xaml.cs:56`).
+- Mode portable memakai scope hash folder exe (pipe dan mutex tidak bertemu instance terpasang); mode terpasang memakai nama bawaan
+  dan membuat `Makdon.AppMutex` untuk installer. Mutex installer tidak pernah dibuat di mode portable.
+- Pemeriksaan startup portable (folder data bisa ditulisi, pendaftaran "Buka dengan" basi atau bentrok dengan instalasi) dijadwalkan
+  setelah jendela tampil, agar dialognya tidak menahan pembukaan berkas (`MainWindow.xaml.cs:486-497`).
+- Instance utama yang sedang menutup mengabaikan kiriman file (`closing`/`closed`, `MainWindow.xaml.cs:67`).
 
 ### 4.2 Buka file
 
-Kode: `MainWindow.OpenFile` (`MainWindow.xaml.cs:236-275`), `DocumentTab.Load` (`DocumentTab.cs:135-141`), `TextFileIO.ReadBytes/Decode`.
+Kode: `MainWindow.OpenFile` (`MainWindow.xaml.cs:238-277`), `DocumentTab.Load` (`DocumentTab.cs:135-141`), `TextFileIO.ReadBytes/Decode`.
 
 ```mermaid
 sequenceDiagram
@@ -349,7 +377,7 @@ dengan path lama.
 
 ### 4.5 Perubahan file dari luar (watcher, hash/FileStamp, antrean konflik, dialog)
 
-Kode: `DocumentTab.cs:227-277, 347-391`, `MainWindow.xaml.cs:53, 316-366`.
+Kode: `DocumentTab.cs:227-277, 347-391`, `MainWindow.xaml.cs:55, 318-368`.
 
 ```mermaid
 sequenceDiagram
@@ -389,7 +417,7 @@ sequenceDiagram
 ```
 
 Tab yang ditutup atau yang konfliknya sudah selesai (`HasExternalConflict == false`) dilewati saat antrean diproses
-(`MainWindow.xaml.cs:334`).
+(`MainWindow.xaml.cs:336`).
 
 ### 4.6 Ekspor HTML
 
@@ -424,7 +452,7 @@ Ekspor memakai teks editor saat ini (termasuk yang belum disimpan), bukan versi 
 
 ### 4.7 Pemulihan dan penyimpanan sesi
 
-Kode: `MainWindow.xaml.cs:36-60, 187-232, 714-734`, `AppSettings.SaveMerged` (`AppSettings.cs:96-107`).
+Kode: `MainWindow.xaml.cs:37-62, 189-234, 876-896`, `AppSettings.SaveMerged` (`AppSettings.cs:99-110`).
 
 ```mermaid
 sequenceDiagram
@@ -456,7 +484,7 @@ Hanya tab yang punya path yang masuk sesi; dokumen "Tanpa Judul" dan isi yang be
 
 ### 4.8 Penanganan galat
 
-Kode: `App.xaml.cs:64-102` (cabang `shuttingDownAfterCrash`: `:67, 75`), `CrashLog.cs:58-91`.
+Kode: `App.xaml.cs:66-104` (cabang `shuttingDownAfterCrash`: `:67, 75`), `CrashLog.cs:57-90`.
 
 ```mermaid
 flowchart TD
@@ -476,7 +504,7 @@ flowchart TD
 
 ### 4.9 Pratinjau Cetak (Ctrl+Shift+P) dan Cetak
 
-Kode: `MainWindow.PrintPreview_Executed` (`MainWindow.xaml.cs:604-631`) dan `Print_Executed` (`:583-601`), `PrintPreviewWindow`
+Kode: `MainWindow.PrintPreview_Executed` (`MainWindow.xaml.cs:766-793`) dan `Print_Executed` (`:583-601`), `PrintPreviewWindow`
 (`PrintPreviewWindow.xaml.cs:45-120, 421-486`), `PrintSource`/`PrintService` (`PrintLayout.cs:92-156`), `PreviewBuild`
 (`PreviewBuild.cs:91-202`), `HeaderFooterPaginator.cs`.
 
@@ -562,7 +590,7 @@ Poin penting:
 - **Cetak langsung (Ctrl+P, `Print_Executed`)** tidak melewati `PreviewBuild`: `PrintDialog` -> `PageLayout.FromPrintableArea` (ukuran media
   terorientasi dari dialog, margin Normal) -> `PrintService.Print`, yang membuat `FlowDocument` baru, membungkusnya dengan
   `HeaderFooterPaginator` (`PageCount` dihitung sinkron), dan memanggil `dialog.PrintDocument`. Seluruhnya sinkron di UI thread
-  (`MainWindow.xaml.cs:583-601`, `PrintLayout.cs:150-155`); galat selain OOM ditampilkan lewat `ShowError("Gagal mencetak.")`.
+  (`MainWindow.xaml.cs:745-763`, `PrintLayout.cs:150-155`); galat selain OOM ditampilkan lewat `ShowError("Gagal mencetak.")`.
   Cetak langsung tidak menyediakan rentang halaman (belum ada di kode).
 
 ### 4.10 Siklus hidup paket XPS dan penanganan galat pratinjau
@@ -611,7 +639,7 @@ flowchart TD
 untuk yang lain (`PrintPreviewWindow.xaml.cs:137-138`). Kegagalan render FlowDocument di jalur cetak datang sebagai
 `InvalidOperationException` berpesan ramah tanpa path ([ADR-24](DESIGN-DECISIONS.md#adr-24-dokumen-galat-tidak-pernah-dicetak)).
 Pembuatan jendela di `PrintPreview_Executed` ditangkap terpisah (OOM: pesan memori; lainnya: "Gagal membuka pratinjau cetak."),
-sedangkan `ShowDialog` sengaja di luar `try` (`MainWindow.xaml.cs:608-630`).
+sedangkan `ShowDialog` sengaja di luar `try` (`MainWindow.xaml.cs:770-792`).
 
 ## 5. Model thread
 
@@ -620,16 +648,16 @@ sedangkan `ShowDialog` sengaja di luar `try` (`MainWindow.xaml.cs:608-630`).
 | Semua UI, `DocumentTab`, `DocumentView`, `FindReplaceBar`, `MainWindow` | UI thread (Dispatcher WPF) | `DocumentTab` menangkap `Dispatcher.CurrentDispatcher` saat dibuat (`DocumentTab.cs:26`) |
 | Timer: `renderTimer`, `statsTimer` (`DocumentView`), `changeTimer` (`DocumentTab`), `queryTimer`, `refreshTimer` (`FindReplaceBar`) | UI thread (`DispatcherTimer`) | `DocumentView.xaml.cs:32-33`, `DocumentTab.cs:27,69`, `FindReplaceBar.xaml.cs:22-23` |
 | Baca/hash/tulis file dokumen, ekspor, `CheckExternalChange` | UI thread, sinkron | tidak ada `Task.Run` di `DocumentTab`/`HtmlExporter`/`MainWindow` |
-| Cetak langsung (Ctrl+P): buat dokumen, `ComputePageCount`, `PrintDialog.PrintDocument` | UI thread, sinkron (membekukan UI selama berjalan) | `MainWindow.xaml.cs:583-601`, `PrintLayout.cs:131-155` |
+| Cetak langsung (Ctrl+P): buat dokumen, `ComputePageCount`, `PrintDialog.PrintDocument` | UI thread, sinkron (membekukan UI selama berjalan) | `MainWindow.xaml.cs:745-763`, `PrintLayout.cs:131-155` |
 | Parse Markdig + `ResolveImageUrls` untuk pratinjau utama, dokumen 100 rb karakter atau lebih | Thread pool; hasil dilanjutkan di UI thread (`await` tanpa `ConfigureAwait(false)`) | `DocumentView.xaml.cs:27, 401` |
 | Parse snapshot Pratinjau Cetak (`PrintSource`), 100 rb karakter atau lebih | Thread pool (`Task.Run`); `PreviewBuild` menunggunya dengan `ConfigureAwait(false)` lalu kembali ke UI thread lewat `dispatcher.BeginInvoke`, tidak bergantung pada `SynchronizationContext`. Di bawah ambang: sinkron di UI thread. Parse yang berjalan tidak dibatalkan saat jendela ditutup (Markdig tak punya titik pembatalan); hasilnya dibuang bersama `PrintSource` | `PrintLayout.cs:92-105`, `PreviewBuild.cs:102-124` |
 | Pembuatan `FlowDocument` (`CreateFlowDocument`, `PrintSource.CreateDocument`) | UI thread (wajib) | komentar `DocumentView.xaml.cs:395`; `PrintLayout.cs:118` |
 | Paginasi FlowDocument latar dan penulisan XPS async (`PreviewBuild`) | UI thread, dalam potongan lewat dispatcher; bukan thread terpisah. Kabar kemajuan/selesai (`Changed`) dipicu dari callback dispatcher, dan `Dispose()` harus mematikan paginasinya. Detail internal WPF untuk penulis XPS belum diverifikasi | komentar `PreviewBuild.cs:250`; `PreviewBuildTests.cs:168-196` (paginasi berhenti setelah `Dispose`) |
 | Pembersihan paket XPS | UI thread, `DispatcherPriority.ApplicationIdle`; timer cadangan 10 dtk (`DispatcherTimer`, prioritas `Background`) | `PreviewBuild.cs:32, 268, 293-301` |
 | Event `FileSystemWatcher` | Thread pool, dipindah ke UI lewat `dispatcher.BeginInvoke` | `DocumentTab.cs:383-391` |
-| Loop server pipe `SingleInstance` | Thread pool (`Task.Run`, `ConfigureAwait(false)`); callback `onFiles` di thread latar, lalu `Dispatcher.BeginInvoke` | `SingleInstance.cs:90-151`, `App.xaml.cs:57-58` |
+| Loop server pipe `SingleInstance` | Thread pool (`Task.Run`, `ConfigureAwait(false)`); callback `onFiles` di thread latar, lalu `Dispatcher.BeginInvoke` | `SingleInstance.cs:90-151`, `App.xaml.cs:59-60` |
 | `SystemEvents.UserPreferenceChanged` (tema Ikuti Sistem) | Dipindah ke UI lewat `BeginInvoke` | `Theming.cs:103-110` |
-| `CrashLog.Write` | Thread mana pun; diserialisasi `lock (Gate)` | `CrashLog.cs:17,34` |
+| `CrashLog.Write` | Thread mana pun; diserialisasi `lock (Gate)` | `CrashLog.cs:17, 33` |
 
 Konsekuensi: operasi I/O besar (muat file ratusan MB, ekspor dengan banyak gambar, hash saat stempel "racy") membekukan UI selama
 berjalan; batas ukuran dan anggaran ekspor ada untuk membatasi ini. Pencetakan (Cetak langsung dan tombol Cetak di pratinjau) juga
@@ -670,9 +698,9 @@ stateDiagram-v2
 
 | State | Arti |
 | --- | --- |
-| `conflictQueue` + `conflictPromptOpen` | Satu dialog konflik pada satu waktu. Dialog bersifat modal tetapi memompa pesan, sehingga konflik tab lain datang saat dialog terbuka; itu hanya masuk antrean dan diproses setelah dialog tertutup (`MainWindow.xaml.cs:316-342`). `OnSaveConflict` memakai penanda yang sama dan memulihkan nilai lamanya (`:371-392`). |
+| `conflictQueue` + `conflictPromptOpen` | Satu dialog konflik pada satu waktu. Dialog bersifat modal tetapi memompa pesan, sehingga konflik tab lain datang saat dialog terbuka; itu hanya masuk antrean dan diproses setelah dialog tertutup (`MainWindow.xaml.cs:318-344`). `OnSaveConflict` memakai penanda yang sama dan memulihkan nilai lamanya (`:371-392`). |
 | `preserveStoredSession` | `true` bila instance dibuka dengan argumen file: saat keluar `Session` di `settings.json` tidak ditimpa. Menjadi `false` begitu `OpenUserFile` benar-benar mengembalikan tab (kiriman instance lain, dialog Buka, seret-lepas, Berkas Terakhir). Pemulihan sesi dan argumen startup memakai `OpenFile` langsung sehingga tidak "mengadopsi". `forceSession` (galat fatal) mengabaikannya. |
-| `closing`, `closed` | `closing`: penutupan sedang berjalan; direset bila pengguna membatalkan. Efeknya hanya dua: `ProcessConflictQueue` di `finally` milik `TrySave` dilewati (`MainWindow.xaml.cs:446`) dan kiriman file dari instance lain diabaikan (`:65`, bersama `closed`). `closed`: setelah `Window_Closed`. |
+| `closing`, `closed` | `closing`: penutupan sedang berjalan; direset bila pengguna membatalkan. Efeknya hanya dua: `ProcessConflictQueue` di `finally` milik `TrySave` dilewati (`MainWindow.xaml.cs:448`) dan kiriman file dari instance lain diabaikan (`:65`, bersama `closed`). `closed`: setelah `Window_Closed`. |
 | `zoomPercent`, tema | Disalin ke `AppSettings` saat `SaveSettings`. |
 
 ### 6.3 `DocumentView`

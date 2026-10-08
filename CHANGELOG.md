@@ -13,7 +13,19 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan p
 
 ### Added
 
-- **Pratinjau Cetak** (Ctrl+Shift+P, Berkas > Pratinjau Cetak..., tombol toolbar; `AppCommands.PrintPreview`): jendela modal berisi halaman cetak yang
+- **Installer Windows** (`installer/Makdon.iss`, Inno Setup 6): pasang per pengguna (bawaan, tanpa UAC) atau untuk semua pengguna (meminta admin);
+  Start Menu; "Buka dengan" didaftarkan otomatis; downgrade ditolak; uninstall menanyakan penghapusan pengaturan dan catatan galat (bawaan Tidak),
+  dan tidak menghapus apa pun dengan `/SILENT`. Bahasa Indonesia dan Inggris.
+- **Mode portable**: folder dengan penanda `Makdon.portable` di samping exe menyimpan `settings.json` dan `crash.log` di `data\`. Zip portable
+  dibuat oleh `scripts/build-release.ps1`.
+- **Integrasi Explorer (portable)**: Berkas > Integrasi Explorer > Daftarkan ke "Buka dengan" / Cabut pendaftaran (HKCU). Menolak bila versi
+  terpasang ada; meminta konfirmasi sebelum mengganti pendaftaran exe lain; menawarkan memperbarui path yang basi saat startup.
+- **Bantuan > Tentang Makdon**: versi, mode, lisensi MIT, dan tautan halaman rilis. Makdon tidak memeriksa pembaruan sendiri.
+- **Rilis**: profil publish `win-x64` (self-contained, folder), `scripts/build-release.ps1` (build 0 warning, test, publish, installer,
+  zip, `SHA256SUMS.txt`), dan `.github/workflows/release.yml` (dipicu tag `v*`, attestasi asal-usul build, draft lalu publikasi).
+- **LICENSE** (MIT) dan **THIRD-PARTY-NOTICES.txt**; keduanya ikut dalam setiap rilis.
+
+- **Pratinjau Cetak**- **Pratinjau Cetak** (Ctrl+Shift+P, Berkas > Pratinjau Cetak..., tombol toolbar; `AppCommands.PrintPreview`): jendela modal berisi halaman cetak yang
   disusun async (paginasi FlowDocument, lalu halaman ditulis ke paket XPS di memori untuk `DocumentViewer`) dengan pilihan orientasi (potret/lanskap),
   kertas (A4/Letter), margin (Sempit 0,5"/Normal 0,75"/Lebar 1"), kotak kaki halaman, navigasi halaman, zoom (Satu halaman/Lebar halaman/100%, +/-, Ctrl+roda),
   dan tombol Cetak... yang mencetak halaman yang tampil. Dokumen diambil sebagai snapshot saat dibuka (penyuntingan sesudahnya tidak mengubahnya),
@@ -27,6 +39,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan p
 
 ### Security
 
+- Pendaftaran "Buka dengan" setelah review: perintah relatif tidak lagi dinormalkan terhadap folder kerja (dianggap exe lain, tidak dihapus "Cabut"); path UNC
+  tidak diperiksa dengan `File.Exists` (tidak dianggap basi, instalasi UNC diabaikan); `Register` menolak exe yang bukan `Makdon.exe` atau tidak ada.
+- Rilis: action CI disematkan ke SHA commit; `build-release.ps1 -VerifyInstallerContents` hanya di CI (atau `-Force`) dan menolak bila instalasi ada.
+- Pendaftaran "Buka dengan" hanya di HKCU (portable) atau lewat installer; satu tabel registri untuk aplikasi, installer, dan skrip; tidak ada
+  nilai bawaan ekstensi atau `UserChoice` yang disentuh.
+- Penanda `Makdon.portable` tidak ikut installer, dihapus dari bahan zip, dan diperiksa oleh installer (`#if FileExists`) dan skrip rilis.
 - Dokumen galat tidak lagi tercetak: bila render gagal, Cetak (Ctrl+P) sebelumnya dapat mencetak dokumen galat yang memuat jalur `crash.log` (path profil pengguna)
   dan pesan galat; kini jalur cetak/pratinjau cetak melempar galat berpesan ramah tanpa path (`CreateFlowDocument(throwOnFailure: true)`) dan pratinjau utama tetap
   menampilkan dokumen galat di layar.
@@ -40,6 +58,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan p
 
 ### Fixed
 
+- Pratinjau Cetak gagal di .NET 10 karena pembatasan batas paket XPS (font tidak bisa dimuat dari paket XPS di memori). Diperbaiki dengan
+  switch `Switch.System.Windows.DisableXpsPackageBoundaryRestriction` di runtimeconfig (ADR-32).
+- Test WPF sebelumnya menjalankan `App.OnStartup` sungguhan (mutex/pipe produksi, `MainWindow`, settings `%APPDATA%`); host test kini memakai `TestApp`
+  tanpa `OnStartup` (ADR-33).
 - Pratinjau Cetak: tombol Sebelumnya dari halaman terakhir melompati satu halaman (atau tak berefek) karena gulir mentok sebelum halaman tujuan mencapai
   puncak; navigasi kini relatif terhadap halaman yang dilaporkan kotak halaman (ditemukan selama pengembangan fitur, belum pernah dirilis).
 - Cetak (Ctrl+P): ukuran halaman dari dialog Cetak tidak divalidasi (NaN, tak hingga, sangat kecil/besar langsung dipakai); kini ukuran di luar 200-96.000 DIP
@@ -50,6 +72,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan p
 
 ### Changed
 
+- **Target .NET 10** (`net10.0-windows`, SDK 10 untuk build); .NET 9 berhenti didukung 2026-11-10. Mode terpasang tetap memakai
+  `%APPDATA%\Makdon\settings.json` dan `%LOCALAPPDATA%\Makdon\crash.log`; lokasinya kini lewat `AppPaths`.
+- Single-instance: portable memakai scope per folder exe (tidak meneruskan berkas ke instance terpasang atau portable lain di folder berbeda).
+  Mode terpasang membuat mutex bernama tetap `Makdon.AppMutex` untuk installer.
+- README: instalasi (installer, portable), persyaratan Windows, peringatan SmartScreen/Smart App Control dan verifikasi checksum, migrasi dari
+  skrip, pembaruan, uninstall, lokasi data per mode, dan lisensi. Dokumen pengembangan diperbarui (lihat `docs/README.md`).
 - **Aplikasi dinamai Makdon** (sebelumnya bernama MdViewer). Berubah: folder dan proyek (`src/Makdon`, `src/Makdon.Tests`, `Makdon.sln`,
   `Makdon.csproj`), nama assembly dan namespace (`Makdon`), berkas hasil publish (`Makdon.exe`), judul jendela ("... — Makdon") dan caption dialog,
   serta dokumentasi dan skrip. Perilaku tidak berubah.

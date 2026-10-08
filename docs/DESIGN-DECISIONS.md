@@ -5,9 +5,8 @@ perubahan di masa depan tidak melanggar alasan aslinya tanpa sadar.
 **Pembaca:** pengembang dan reviewer.
 
 **Aturan dokumen ini:** alasan hanya diambil dari komentar kode, nama test, README, dan CLAUDE.md. Bila motivasi tidak tertulis di
-mana pun, ditulis "tidak tercatat" atau "dugaan, belum diverifikasi". Riwayat git hanya dua commit (`448e1ad`, `b2a35be`), jadi tidak ada
-sejarah keputusan yang bisa ditelusuri dari sana (commit kedua, `b2a35be`, menambah dokumentasi dan menutup celah tautan UNC; ADR-19
-sampai ADR-26 menjelaskan fitur Pratinjau Cetak yang belum di-commit saat ditulis). Arsitektur: [ARCHITECTURE.md](ARCHITECTURE.md). Keamanan: [SECURITY.md](SECURITY.md).
+mana pun, ditulis "tidak tercatat" atau "dugaan, belum diverifikasi". Riwayat git pendek (`git log`), jadi sejarah keputusan tidak banyak bisa ditelusuri dari sana (`b2a35be` menambah dokumentasi dan
+menutup celah tautan UNC; `6d1d539` menambah Pratinjau Cetak, ADR-19 sampai ADR-26; ADR-27 sampai ADR-33 adalah fitur distribusi yang belum di-commit saat ditulis). Arsitektur: [ARCHITECTURE.md](ARCHITECTURE.md). Keamanan: [SECURITY.md](SECURITY.md).
 
 Format tiap catatan: **Konteks** - **Keputusan** - **Konsekuensi** - **Bukti** (kode `path:baris`, test).
 Status semua catatan: berlaku (tercermin di kode saat ini).
@@ -21,7 +20,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 | [05](#adr-05-dialog-konflik-berlabel-dan-diserialisasi) | Dialog konflik berlabel dan diserialisasi |
 | [06](#adr-06-pipeline-ekspor-terpisah-allowlist-url-dan-anggaran-data-uri) | Pipeline ekspor terpisah, allowlist URL, anggaran data URI |
 | [07](#adr-07-pemblokiran-gambar-remoteunc-di-pratinjau-dan-cetak) | Pemblokiran gambar remote/UNC di pratinjau |
-| [08](#adr-08-single-instance-dengan-mutex-dan-named-pipe-per-sesi) | Single-instance Mutex + pipe per sesi |
+| [08](#adr-08-single-instance-dengan-mutex-dan-named-pipe-per-sesi) | Single-instance Mutex + pipe per sesi (+ scope portable, ADR-29) |
 | [09](#adr-09-aturan-sesi-preservestoredsession) | Aturan sesi `preserveStoredSession` |
 | [10](#adr-10-normalizelineendings-dan-batas-waktu-regex) | `NormalizeLineEndings` + batas waktu regex |
 | [11](#adr-11-crashlog-dan-isrecoverable) | `CrashLog` dan `IsRecoverable` |
@@ -31,7 +30,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 | [15](#adr-15-pengaturan-tidak-pernah-melempar-dan-digabung-saat-simpan) | Pengaturan tidak pernah melempar, digabung saat simpan |
 | [16](#adr-16-pembukaan-dokumen-hanya-lewat-openfile-dengan-batas-ukuran) | Pembukaan dokumen hanya lewat `OpenFile`, batas ukuran |
 | [17](#adr-17-klik-tautan-di-pratinjau) | Klik tautan di pratinjau |
-| [18](#adr-18-skrip-asosiasi-file-hanya-hkcu) | Skrip asosiasi file hanya HKCU |
+| [18](#adr-18-skrip-asosiasi-file-hanya-hkcu) | Skrip asosiasi file hanya HKCU (alat pengembangan; aplikasi memakai ADR-30) |
 | [19](#adr-19-pratinjau-cetak-lewat-paket-xps-di-memori) | Pratinjau Cetak lewat paket XPS di memori |
 | [20](#adr-20-snapshot-saat-pratinjau-dibuka-dan-parse-yang-dipakai-bersama) | Snapshot saat pratinjau dibuka dan parse yang dipakai bersama |
 | [21](#adr-21-kaki-halaman-di-dalam-margin-bawah) | Kaki halaman di dalam margin bawah |
@@ -40,6 +39,13 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 | [24](#adr-24-dokumen-galat-tidak-pernah-dicetak) | Dokumen galat tidak pernah dicetak |
 | [25](#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle) | Galat pratinjau dibungkus `Guard`, paket XPS dibersihkan setelah idle |
 | [26](#adr-26-seam-khusus-test-pada-kode-cetak) | Seam khusus test pada kode cetak |
+| [27](#adr-27-folder-self-contained-bukan-single-file-dan-installer-per-pengguna) | Folder self-contained (bukan single-file); installer per pengguna |
+| [28](#adr-28-mode-portable-lewat-penanda-makdonportable-data-di-data) | Mode portable lewat penanda `Makdon.portable`; data di `data\` |
+| [29](#adr-29-scope-single-instance-per-folder-exe-untuk-portable) | Scope single-instance per folder exe untuk portable |
+| [30](#adr-30-pendaftaran-buka-dengan-portable-di-hkcu-lewat-fileassociation-dan-iregistrystore-tolak-bila-terpasang) | "Buka dengan" portable lewat `FileAssociation` + `IRegistryStore`; tolak bila terpasang |
+| [31](#adr-31-mutex-installer-bernama-tetap-makdonappmutex-bukan-restart-manager) | Mutex installer bernama tetap (`Makdon.AppMutex`), bukan Restart Manager |
+| [32](#adr-32-net-10-dan-switch-xps-di-runtimeconfig) | .NET 10 dan switch XPS di runtimeconfig |
+| [33](#adr-33-wpfhost-memakai-testapp-tanpa-onstartup) | `WpfHost` memakai `TestApp` tanpa `OnStartup` |
 
 ---
 
@@ -57,8 +63,8 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   (`ResolveLinkTarget`) sehingga link tidak diganti file biasa. Hash yang dikembalikan adalah hash byte yang benar-benar ditulis.
 - **Konsekuensi.** File `~md########.tmp` muncul sebentar di folder dokumen. Jalur `WriteInPlace` tidak atomik (README, bagian
   Batasan). Penulisan dokumen, ekspor HTML, dan `settings.json` memakai jalur yang sama: `TextFileIO.Write`. Pengecualian: `crash.log`
-  ditulis dengan `File.AppendAllText` (`CrashLog.cs:41`), bukan atomik.
-- **Bukti.** `src/Makdon/TextFileIO.cs:134-202`, `HtmlExporter.cs:66`, `AppSettings.cs:82`. Test:
+  ditulis dengan `File.AppendAllText` (`CrashLog.cs:40`), bukan atomik.
+- **Bukti.** `src/Makdon/TextFileIO.cs:134-202`, `HtmlExporter.cs:66`, `AppSettings.cs:85`. Test:
   `TextFileIOCoverageTests.WriteBytesAtomic_*` (`IoAndUtilityCoverageTests.cs:97-196`, termasuk fallback lewat ACL deny
   CreateFiles), `TextFileIOHardeningTests.Write_VeryLongFileName_StillSavesAtomically` (`HardeningTests.cs:669`),
   `TextFileIOFileTests.Write_*` (`TextFileIOTests.cs:295-445`). Penulisan lewat symlink hanya teruji bila mesin boleh membuat symlink
@@ -80,7 +86,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   Simpan setelah dekode lossy menetapkan penggantian U+FFFD secara permanen (karena itu ada konfirmasi); `SaveCore` menghapus flag.
   Deteksi 1252-vs-lain berbasis heuristik "bukan UTF-8 valid", jadi file encoding lain tanpa BOM (mis. Shift-JIS) dibaca sebagai 1252
   (belum diuji; inferensi dari urutan deteksi).
-- **Bukti.** `TextFileIO.cs:40-127`, `DocumentTab.cs:81, 183`, `MainWindow.xaml.cs:429-432`. Test: `TextFileIODecodeTests`
+- **Bukti.** `TextFileIO.cs:40-127`, `DocumentTab.cs:81, 183`, `MainWindow.xaml.cs:431-434`. Test: `TextFileIODecodeTests`
   (`TextFileIOTests.cs:6-162`), `Decode_EachBomWithInvalidBody_IsLossy_*` (`IoAndUtilityCoverageTests.cs:43`), `Lossy_*`
   (`DocumentTabConflictEdgeTests.cs:482-578`).
 
@@ -98,7 +104,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   terdeteksi. Watcher didebounce 400 ms dan percobaan baca maksimal 5 kali (1 baca awal + 4 ulangan; `++changeRetries < MaxChangeRetries`) bila file terkunci penulisnya; saat jendela aktif
   kembali, tab aktif diperiksa sebagai cadangan (share jaringan tanpa dukungan watcher).
 - **Konsekuensi.** File yang baru ditulis (< 2 dtk) dibaca penuh tiap pemeriksaan. Semua pembacaan sinkron di UI thread. Pemeriksaan
-  saat aktivasi hanya untuk tab aktif (`MainWindow.xaml.cs:53`); tab lain bergantung pada watcher.
+  saat aktivasi hanya untuk tab aktif (`MainWindow.xaml.cs:55`); tab lain bergantung pada watcher.
 - **Bukti.** `DocumentTab.cs:37-43, 227-277, 300-321`, `FileStamp.cs`. Test: `FileStamp_IsReliable_*`
   (`IoAndUtilityCoverageTests.cs:265`), `CheckExternalChange_SameSizeAndTimestampButDifferentContent_IsStillDetected`
   (`DocumentTabConflictEdgeTests.cs:398`), `*_TouchWithIdenticalContent_IsIgnored`, `ExternalConflict_*`
@@ -123,7 +129,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 
 - **Konteks.** `ChoiceDialog` dibuat sebagai "pengganti MessageBox Ya/Tidak/Batal yang ambigu" (komentar
   `ChoiceDialog.xaml.cs:10-13`). Dialog modal WPF tetap memompa pesan, jadi event lain (watcher, aktivasi) bisa memicu konflik tab
-  lain atau konflik kedua untuk file yang sama saat dialog terbuka (komentar `MainWindow.xaml.cs:322-323`, `DocumentTab.cs:48-49`).
+  lain atau konflik kedua untuk file yang sama saat dialog terbuka (komentar `MainWindow.xaml.cs:324-325`, `DocumentTab.cs:48-49`).
 - **Keputusan.** Semua dialog konflik memakai `ChoiceDialog` dengan label yang menjelaskan akibat ("Muat dari Disk", "Pertahankan
   Editor", "Timpa", "Batal"); pilihan paling aman jadi bawaan (Enter) dan Esc/X = pilihan batal. Penanda `conflictPromptOpen` +
   `conflictQueue` menyerialisasi dialog; `OnSaveConflict` memakai penanda yang sama. `DocumentTab.SaveTo` menyetel `saving = true`
@@ -131,7 +137,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   ditanyakan setelah `SaveTo` selesai (`TrySave` -> `ProcessConflictQueue`, kecuali sedang `closing`).
 - **Konsekuensi.** Tidak boleh menampilkan `MessageBox`/dialog konflik langsung dari event (aturan CLAUDE.md). Konflik tidak pernah
   bertumpuk atau hilang diam-diam.
-- **Bukti.** `MainWindow.xaml.cs:316-392, 427-448`, `ChoiceDialog.xaml.cs`. Test: `ChoiceDialogTests` (`ChoiceDialogTests.cs:46-66`),
+- **Bukti.** `MainWindow.xaml.cs:318-394, 429-450`, `ChoiceDialog.xaml.cs`. Test: `ChoiceDialogTests` (`ChoiceDialogTests.cs:46-66`),
   `SaveTo_Conflict_SuppressesExternalChangeChecksWhileTheDialogIsOpen` (`DocumentTabConflictEdgeTests.cs:237`). Logika antrean di
   `MainWindow` **tidak** diuji (tidak ada test yang membuat `MainWindow`).
 
@@ -159,7 +165,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konsekuensi.** HTML hasil ekspor bisa sampai ~30 MB data gambar. SVG/BMP dan gambar > 2 MB tidak tersemat. Gambar `http(s)`
   tetap dirujuk apa adanya di HTML (penerima yang membukanya bisa dilacak). Tipe gambar ditentukan dari ekstensi, bukan isi.
   Ekspor berjalan sinkron di UI thread; `OutOfMemoryException` dan galat lain ditangkap di `ExportHtml_Executed`.
-- **Bukti.** `MarkdownSupport.cs:58-78, 86-115, 213-358`, `HtmlExporter.cs`, `MainWindow.xaml.cs:565-580`. Test:
+- **Bukti.** `MarkdownSupport.cs:58-78, 86-115, 213-358`, `HtmlExporter.cs`, `MainWindow.xaml.cs:727-742`. Test:
   `ExportSanitizationTests` (`HardeningTests.cs:10-185`), `ExportXssVectorTests` (`ExportAndImageSecurityTests.cs:11-327`),
   `ExportImageBudgetAndPrivacyTests` (seluruh berkas), `HtmlExporterTests` (`HtmlAndMarkdownSupportTests.cs:212-382`). Cabang
   symlink-menunjuk-keluar (`MarkdownSupport.cs:333-334`) tidak punya test.
@@ -180,7 +186,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konsekuensi.** `BlockRemoteImages` adalah flag statis global (`DocumentView.BlockRemoteImages`), bukan per tab; mengubahnya
   memanggil `RefreshPreview` di semua tab. Gambar `data:` sah tampil di ekspor tetapi tidak di pratinjau. Pratinjau tidak
   membatasi gambar lokal ke folder dokumen (hanya ekspor yang membatasi).
-- **Bukti.** `MarkdownSupport.cs:122-200`, `DocumentView.xaml.cs:56, 424-527`, `MainWindow.xaml.cs:123-129`. Test:
+- **Bukti.** `MarkdownSupport.cs:122-200`, `DocumentView.xaml.cs:56, 424-527`, `MainWindow.xaml.cs:125-131`. Test:
   `ResolveImageUrlsSecurityTests` (`ExportAndImageSecurityTests.cs:330-491`), `RemoteImageBlockingTests` (`HardeningTests.cs:188-280`),
   `RemoteImageOverFtp_IsNotFetched_WhenRemoteImagesAreBlocked` (membuka `TcpListener` lokal dan memastikan WPF tidak terhubung,
   `DocumentViewLifecycleTests.cs:510`), `UndecodableImage_*` (`:414-459`), `DataImage_ShowsMarker_*` (`:468`).
@@ -201,7 +207,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konsekuensi.** File yang dikirim ke instance yang sedang menutup diabaikan; peluncuran kedua tanpa argumen hanya mengaktifkan
   jendela yang ada (README). Server hanya berhenti sendiri setelah gagal berulang (dicatat ke `CrashLog`); sesudahnya peluncuran
   berikutnya dikirim ke pipe yang tidak melayani lalu gagal dan membuka instance sendiri (inferensi dari alur `App.OnStartup`, tidak diuji).
-- **Bukti.** `SingleInstance.cs`, `App.xaml.cs:19-45`. Test: `SingleInstanceServerTests` (24 test, scope unik per test) dan
+- **Bukti.** `SingleInstance.cs`, `App.xaml.cs:19-47`. Test: `SingleInstanceServerTests` (24 test, scope unik per test) dan
   `SingleInstanceTests` (`HardeningTests.cs:795-870`). Properti `CurrentUserOnly` sendiri tidak punya test yang membuktikan pengguna
   lain ditolak (butuh akun kedua).
 
@@ -217,7 +223,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   harus bisa dipulihkan.
 - **Konsekuensi.** Ada dua jalur pembukaan yang harus dibedakan dengan sengaja saat menambah fitur pembukaan file baru. Klik tautan
   relatif antar-dokumen memakai `OpenFile` (bukan `OpenUserFile`), jadi tidak mengadopsi (`MainWindow.Attach`, `:310`).
-- **Bukti.** `MainWindow.xaml.cs:27-30, 56-59, 76-82, 215-232`, `AppSettings.cs:96-107`. Test hanya di tingkat `AppSettings`:
+- **Bukti.** `MainWindow.xaml.cs:28-31, 58-61, 78-84, 217-234`, `AppSettings.cs:99-110`. Test hanya di tingkat `AppSettings`:
   `SaveMerged_KeepStoredSession_*` (`HardeningTests.cs:763-783`, `IoAndUtilityCoverageTests.cs:769-802`). Logika `MainWindow` tidak diuji.
 
 ## ADR-10 `NormalizeLineEndings` dan batas waktu regex
@@ -241,7 +247,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 ## ADR-11 `CrashLog` dan `IsRecoverable`
 
 - **Konteks.** Galat tak tertangani harus dicatat dan ditampilkan ramah (CLAUDE.md), tetapi melanjutkan setelah keadaan program
-  rusak berbahaya (komentar `CrashLog.cs:52-57`).
+  rusak berbahaya (komentar `CrashLog.cs:51-56`).
 - **Keputusan.** `IsRecoverable` adalah allowlist tipe: `IOException`, `UnauthorizedAccessException`, `NotSupportedException`,
   `Win32Exception`, `RegexMatchTimeoutException`, `FormatException`, `UriFormatException`; `COMException` hanya untuk HRESULT yang
   dikenal (clipboard `0x800401D0-D5`, WIC `0x88982F00-FF`). Selain itu (OOM, `NullReferenceException`, `InvalidOperationException`,
@@ -252,8 +258,8 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   stempel waktu `InvariantCulture`, batas 512 KB.
 - **Konsekuensi.** Bug kecil bertipe `InvalidOperationException`/`NullReferenceException` di jalur UI menutup aplikasi (tab yang
   belum disimpan hilang: hanya path/mode/caret yang masuk sesi). Perilaku "dipangkas otomatis" di README sebenarnya: bila log sudah
-  lebih besar dari 512 KB, **seluruh** file dihapus lalu entri baru ditulis (`CrashLog.cs:38`; test `Write_LogOneByteOverTheLimit_IsDiscarded_*`).
-- **Bukti.** `CrashLog.cs`, `App.xaml.cs:64-102`. Test: `CrashLogTests` (`CrashLogTests.cs`), `CrashLogLimitsTests`
+  lebih besar dari 512 KB, **seluruh** file dihapus lalu entri baru ditulis (`CrashLog.cs:37`; test `Write_LogOneByteOverTheLimit_IsDiscarded_*`).
+- **Bukti.** `CrashLog.cs`, `App.xaml.cs:66-104`. Test: `CrashLogTests` (`CrashLogTests.cs`), `CrashLogLimitsTests`
   (`IoAndUtilityCoverageTests.cs:466-658`). Test dialihkan dari log asli oleh `TestLogRedirect` (`[ModuleInitializer]`).
   `App.OnDispatcherUnhandledException` sendiri tidak diuji.
 
@@ -271,7 +277,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   agar `DynamicResource` langsung menemukan brush.
 - **Konsekuensi.** Tidak ada test yang memeriksa kesamaan kunci Light/Dark (hanya komentar); kunci yang hilang di salah satu kamus
   baru ketahuan saat dijalankan. Lihat [CONTRIBUTING.md](CONTRIBUTING.md#menambah-temakunci-brush-baru) untuk cara memeriksanya.
-- **Bukti.** `Theming.cs`, `EditorTheme.cs`, `Themes/*.xaml`, `MainWindow.xaml.cs:39`. Test: `ThemeManagerApplyTests`
+- **Bukti.** `Theming.cs`, `EditorTheme.cs`, `Themes/*.xaml`, `MainWindow.xaml.cs:40`. Test: `ThemeManagerApplyTests`
   (`DocumentTabTests.cs:1051-1148`, menukar kamus pada `Application` bersama), `EditorThemeContrastTests` (`SmallUtilityTests.cs:249`),
   `ThemeManagerPureTests` (`:199`).
 
@@ -279,12 +285,12 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 
 - **Konteks.** Enum pilihan tema bernama `AppThemeMode { System, Light, Dark }` (`Theming.cs:9`).
 - **Keputusan.** Alasan pemilihan nama **tidak tercatat** di kode, komentar, test, README, maupun riwayat git. Dugaan, belum
-  diverifikasi: awalan `App` menghindari bentrok/ambigu dengan tipe bawaan WPF .NET 9 bernama `ThemeMode`.
+  diverifikasi: awalan `App` menghindari bentrok/ambigu dengan tipe bawaan WPF (sejak .NET 9) bernama `ThemeMode`.
 - **Fakta yang terbukti dari kode.** Nilai disimpan sebagai **teks** di `AppSettings.Theme` (komentar `AppSettings.cs:40`: "agar nilai
   tak dikenal tidak merusak seluruh file"); `ThemeManager.Parse` tidak peka huruf besar-kecil dan nilai tak dikenal/kosong/angka menjadi
   `System`; `Sanitize` menormalkan saat `Load`. Hal yang sama berlaku untuk `SessionTab.Mode` (`ViewMode`). Konsekuensinya: mengganti
   nama anggota enum yang tersimpan (mis. `Dark`) akan membuat pengaturan lama jatuh ke default tanpa error.
-- **Bukti.** `Theming.cs:9, 33-34`, `AppSettings.cs:40-41, 53, 125-128`. Test: `Parse_KnownNamesIgnoringCase_ElseSystem`
+- **Bukti.** `Theming.cs:9, 33-34`, `AppSettings.cs:40-41, 53, 128-131`. Test: `Parse_KnownNamesIgnoringCase_ElseSystem`
   (`SmallUtilityTests.cs:216`), `Load_Theme_IsNormalizedToKnownName` (`AppSettingsTests.cs:127`).
 
 ## ADR-14 Render pratinjau: debounce, parse latar, dan generation check
@@ -308,7 +314,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 ## ADR-15 Pengaturan tidak pernah melempar dan digabung saat simpan
 
 - **Konteks.** Beberapa instance bisa berjalan (mis. beda sesi Windows atau bila pipe gagal) dan `settings.json` bisa diedit tangan
-  atau rusak (komentar `AppSettings.cs:124`, README).
+  atau rusak (komentar `AppSettings.cs:127`, README).
 - **Keputusan.** `Load` dan `Save` menangkap galat I/O/JSON dan mengembalikan bawaan/`false`; tipe salah pada satu properti
   membuat seluruh file jatuh ke bawaan. `Sanitize` membuang entri tak masuk akal (path kosong, duplikat, zoom di luar 50-300,
   indeks aktif di luar rentang). `SaveMerged` memuat ulang file lebih dulu dan menggabungkan `RecentFiles` (milik instance ini di
@@ -318,16 +324,16 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konsekuensi.** File yang rusak ditimpa diam-diam oleh `SaveMerged` berikutnya (test `SaveMerged_CorruptStoredFile_IsReplacedByOwnSettings`).
   Tidak ada penguncian antar-proses: dua instance yang menyimpan bersamaan tetap bisa saling menimpa antara `Load` dan `Save`
   (inferensi dari kode, tidak diuji).
-- **Bukti.** `AppSettings.cs:58-142`. Test: `AppSettingsTests` (40 test), `AppSettingsMergeTests`, `AppSettingsMergeEdgeTests`.
+- **Bukti.** `AppSettings.cs:61-145`. Test: `AppSettingsTests` (40 test), `AppSettingsMergeTests`, `AppSettingsMergeEdgeTests`.
 
 ## ADR-16 Pembukaan dokumen hanya lewat `OpenFile`, dengan batas ukuran
 
-- **Konteks.** Seluruh file dibaca ke memori lalu didekode (komentar `MainWindow.xaml.cs:18, 277`).
+- **Konteks.** Seluruh file dibaca ke memori lalu didekode (komentar `MainWindow.xaml.cs:19, 279`).
 - **Keputusan.** `MainWindow.OpenFile` adalah satu-satunya pintu: `GetFullPath`, deteksi tab ganda (tab yang sudah ada dipilih), konfirmasi
   > 50 MB, tolak > 500 MB, tangkap `OutOfMemoryException` dan `IOException`/`UnauthorizedAccessException` dengan pesan ramah.
 - **Konsekuensi.** `OpenFile` tidak memeriksa ekstensi; penyaringan ekstensi ada di seret-lepas, klik tautan, dan filter dialog
   (`MarkdownFiles.IsMarkdown` juga menyertakan `.txt`). Batas ukuran dan jalur OOM tidak diuji otomatis.
-- **Bukti.** `MainWindow.xaml.cs:19-20, 236-304`.
+- **Bukti.** `MainWindow.xaml.cs:20-21, 238-306`.
 
 ## ADR-17 Klik tautan di pratinjau
 
@@ -385,7 +391,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 ## ADR-20 Snapshot saat pratinjau dibuka dan parse yang dipakai bersama
 
 - **Konteks.** Komentar `PrintLayout.cs:14-17`: snapshot "diambil sekali saat pratinjau dibuka sehingga penyuntingan sesudahnya tidak
-  mengubah pratinjau, dan editor tidak terkunci". Komentar `MainWindow.xaml.cs:603`: jendela modal, jadi editor tidak bisa berubah selama
+  mengubah pratinjau, dan editor tidak terkunci". Komentar `MainWindow.xaml.cs:765`: jendela modal, jadi editor tidak bisa berubah selama
   terbuka. Dokumen besar tidak boleh membekukan UI saat pratinjau dibuka (komentar `PrintLayout.cs:82-87`).
 - **Keputusan.** `DocumentView.CapturePrintSnapshot` menyalin teks, folder dokumen, `BlockRemoteImages`, dan judul (`PrintSnapshot`).
   `PrintPreviewWindow` membuat satu `PrintSource` yang mem-parse sekali (sinkron di bawah `BackgroundParseChars` = 100 rb karakter, selain itu
@@ -412,7 +418,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   pada satu baris; "Halaman X dari N" di kanan; Segoe UI 10, abu-abu) di dalam margin bawah. Posisi: di tengah margin bawah, tetapi tidak lebih
   dekat dari 0,25 inci (`MinFooterEdgeDistance` = 24 DIP) ke tepi kertas, dan tidak pernah keluar dari margin bawah. Bila jumlah halaman
   belum diketahui hanya "Halaman X". Hanya kaki yang ada (tidak ada kepala halaman, walau namanya `HeaderFooterPaginator`). Cetak langsung
-  (Ctrl+P) selalu memakai kaki (`headerFooter: true`, `MainWindow.xaml.cs:594`); di pratinjau bisa dimatikan lewat kotak "Nama dan nomor halaman".
+  (Ctrl+P) selalu memakai kaki (`headerFooter: true`, `MainWindow.xaml.cs:756`); di pratinjau bisa dimatikan lewat kotak "Nama dan nomor halaman".
 - **Konsekuensi.** Untuk margin yang sangat kecil (kurang dari 24 DIP ditambah tinggi teks) teks tetap di dalam margin dan bisa lebih dekat dari
   0,25 inci ke tepi (komentar kode: "tetap di dalam margin bawah ... untuk margin yang sangat kecil"). Ketiga preset margin memenuhi batas itu.
   Kaki ikut Ctrl+P, jadi cetak langsung kini berbeda dari versi sebelum fitur ini (lihat [CHANGELOG](../CHANGELOG.md)).
@@ -481,7 +487,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   kode jendela ditangkap `StartBuild`/`OnBuildChanged` dan ditampilkan `ShowFailure`. `Dispose` membuang peristiwa, mematikan paginasi latar,
   lalu menutup paket hanya setelah penulis XPS melapor batal/selesai, di prioritas `ApplicationIdle`; timer cadangan 10 dtk menutup paket bila
   laporan itu tidak pernah datang, dan dihentikan begitu pembersihan dijadwalkan. Pembuatan jendela di `PrintPreview_Executed` ditangkap, tetapi
-  `ShowDialog` sengaja di luar `try` (komentar `MainWindow.xaml.cs:608-610`): galat callback selama dialog tampil menjadi urusan
+  `ShowDialog` sengaja di luar `try` (komentar `MainWindow.xaml.cs:770-772`): galat callback selama dialog tampil menjadi urusan
   `App.OnDispatcherUnhandledException`, bukan ditelan.
 - **Konsekuensi.** Timer cadangan berarti paket bisa ditutup 10 dtk setelah `Dispose` walau penulis belum melapor; dampaknya pada penulis yang
   masih berjalan **belum diverifikasi**. Galat pada `PreviewBuild` atau jendela tampil sebagai panel galat, bukan dialog.
@@ -504,3 +510,97 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   (`ConfirmPaperMatchesPreview`, `dialog.PrintDocument`) tidak terjangkau test ([ADR-22](#adr-22-pratinjau-punya-pengaturan-kertas-sendiri-dan-konfirmasi-bila-dialog-cetak-berbeda)).
 - **Bukti.** `PrintPreviewWindow.xaml.cs:418-419`, `DocumentView.xaml.cs:486-487`, `PrintLayout.cs:107-112`, `PreviewBuild.cs:82-86`,
   `PreviewBuildTests.cs:15-16, 430, 544-545, 590, 601`, `Support/WpfHost.cs`.
+
+---
+
+## ADR-27 Folder self-contained (bukan single-file) dan installer per pengguna
+
+- **Konteks.** Single-file WPF tetap mengekstrak pustaka native ke folder sementara (jejak di `%TEMP%`, bertentangan dengan portable tanpa
+  jejak). WPF tidak mendukung trimming. Pengguna umum tidak boleh diminta memasang .NET ([DISTRIBUTION.md](DISTRIBUTION.md) §1 #2, §2.1).
+- **Keputusan.** Publish memakai profil `win-x64`: self-contained, `PublishSingleFile=false`, `PublishReadyToRun=false`, `PublishTrimmed=false`.
+  Installer Inno Setup 6 dengan `PrivilegesRequired=lowest` dan `PrivilegesRequiredOverridesAllowed=dialog`: bawaan per pengguna ke
+  `%LOCALAPPDATA%\Programs\Makdon` tanpa UAC; pilihan semua pengguna ke `Program Files`. Mode 64-bit wajib, `MinVersion=10.0.14393`.
+  `IncludeNativeLibrariesForSelfExtract` dihapus dari csproj.
+- **Konsekuensi.** Keluaran lebih besar: 155,5 MB terurai (258 berkas) dan 65,0 MB zip (diukur 2026-10-08). Tidak ada pemeriksaan pembaruan; update manual.
+  ReadyToRun belum diukur manfaatnya. Installer belum pernah dikompilasi, jadi perilakunya **belum diverifikasi**.
+- **Bukti.** `src/Makdon/Properties/PublishProfiles/win-x64.pubxml:11-17`; `src/Makdon/Makdon.csproj:22`; `installer/Makdon.iss:41-49`.
+
+## ADR-28 Mode portable lewat penanda `Makdon.portable`, data di `data\`
+
+- **Konteks.** Satu exe untuk dua mode. Portable harus tanpa jejak di `%APPDATA%`. Pengaturan tidak boleh pindah diam-diam ke tempat lain
+  saat folder tak bisa ditulis (DISTRIBUTION §3).
+- **Keputusan.** `AppPaths.Detect`: penanda di samping exe menentukan mode. `SettingsPath` dan `CrashLogPath` berada di `<folder exe>\data\`.
+  Bila folder data tak bisa ditulis (`IsDataDirectoryWritable`), pengaturan hanya di memori dan pengguna diberi tahu sekali; **tidak** ada fallback
+  ke `%APPDATA%`. Penanda tidak ikut installer (`Excludes`), dihapus dari bahan zip sebelum penanda portable dibuat, dan `Makdon.iss` menolak dikompilasi bila
+  folder publish memuatnya.
+- **Konsekuensi.** Data ikut folder (dan ikut media lepas; lihat [SECURITY.md](SECURITY.md) 2.13). Memindahkan folder portable membuat
+  path pendaftaran basi (ditangani ADR-30). Pengguna yang menyalin folder portable juga menyalin pengaturannya.
+- **Bukti.** `AppPaths.cs:13, 35-41, 60-65, 81-96`; `installer/Makdon.iss:22-25, 80`; `scripts/build-release.ps1:129-130, 155-158`; `AppPathsTests.cs`
+  (`MarkerNextToTheExe_MeansPortable_*`, `IsDataDirectoryWritable_Portable_*`).
+
+## ADR-29 Scope single-instance per folder exe untuk portable
+
+- **Konteks.** Nama mutex dan pipe semula hanya memuat SID pengguna dan id sesi Windows. Portable dan terpasang di sesi yang sama
+  akan saling meneruskan berkas: file yang dibuka di portable masuk ke instance terpasang yang sedang berjalan, atau sebaliknya.
+- **Keputusan.** `AppPaths.SingleInstanceScope`: mode terpasang kosong (nama bawaan); portable `p` + 8 byte pertama SHA-256 dari path folder exe
+  yang dinormalkan (huruf besar, tanpa pemisah di akhir). Nama jadi `Local\Makdon.SingleInstance.<SID>.<scope>` dan pipe
+  `Makdon.<SID>.s<sesi>.<scope>`.
+- **Konsekuensi.** Dua salinan portable di folder berbeda berjalan sebagai instance masing-masing. Dua portable di folder yang sama berbagi satu
+  instance. Memindahkan folder portable menghasilkan scope baru.
+- **Bukti.** `AppPaths.cs:47-55`; `SingleInstance.cs:43-44, 61-62`; `App.xaml.cs:24`; `AppPathsTests.cs`
+  (`SingleInstanceScope_IsAStableHashOfTheExeFolder_WhenPortable`, `SingleInstanceScope_DiffersBetweenPortableFolders`).
+
+## ADR-30 Pendaftaran "Buka dengan" portable di HKCU lewat `FileAssociation` dan `IRegistryStore`; tolak bila terpasang
+
+- **Konteks.** Portable tidak memasang apa pun, tetapi pengguna ingin "Buka dengan" juga untuk versi portable. Installer tidak bisa
+  membersihkan HKCU pengguna secara andal (DISTRIBUTION §4.3). HKCU menutupi HKLM dalam gabungan HKCR. Test tidak boleh menulis registri (CLAUDE.md).
+- **Keputusan.** `FileAssociation` (bukan skrip) menulis tabel registri DISTRIBUTION 4.1 ke HKCU lewat `IRegistryStore`. Deteksi instalasi membaca kunci
+  `Uninstall\{AppId}_is1` di HKCU dan HKLM (view 64-bit, `WOW6432Node`), lalu memeriksa `Makdon.exe` di folder yang tercatat.
+  `Register` menolak (`BlockedByInstallation`) bila ada instalasi, tanpa memandang hive. Exe yang sudah terdaftar diklasifikasi
+  (`ThisExe`, `Stale`, `OtherPortable`, `OtherExe`) dan hanya diganti setelah konfirmasi. `Unregister` hanya menghapus kunci yang menunjuk exe ini.
+  Pemeriksaan startup portable (`CheckStartup`) menawarkan memperbarui path basi, atau mencabut pendaftaran portable yang menutupi instalasi.
+  Perintah relatif diklasifikasi `OtherExe` dan tidak dinormalkan terhadap folder kerja; path UNC tidak diperiksa dengan `File.Exists` (`OtherExe`, tanpa I/O di thread UI); `Register` menolak `ExeNotFound` bila exe bukan `Makdon.exe` atau tidak ada (lihat [DISTRIBUTION.md](DISTRIBUTION.md) 4.3). Test memakai `FakeRegistryStore` (`Support/FakeRegistryStore.cs`).
+- **Konsekuensi.** GUID `AppId` menjadi konstanta di tiga tempat (`AppInfo.cs:9`, `FileAssociation.cs:78-79`, `installer/Makdon.iss:34`) yang harus sama.
+  Status "paling asing" bisa menyembunyikan tawaran pencabutan bila dua kunci menunjuk exe berbeda (dugaan, lihat DISTRIBUTION 4.3).
+- **Bukti.** `FileAssociation.cs:106-125, 127-175, 178-184, 189-210, 213-237, 243-271`; `RegistryStore.cs:11-32`;
+  `FileAssociationTests.cs` (`Installation_*`, `Register_*`, `Unregister_*`, `CheckStartup_*`, `Status_*`).
+
+## ADR-31 Mutex installer bernama tetap (`Makdon.AppMutex`), bukan Restart Manager
+
+- **Konteks.** Installer harus tahu Makdon sedang berjalan agar dokumen belum disimpan tidak hilang. Nama mutex single-instance memuat SID pengguna, sehingga
+  tidak bisa dipakai installer (DISTRIBUTION §5.2). Restart Manager tidak ditangani aplikasi, dan `Window_Closing` bisa membatalkan penutupan
+  (`MainWindow.xaml.cs:876`), jadi Restart Manager tidak bisa dipakai untuk memaksa penutupan dengan aman.
+- **Keputusan.** `AppMutex=Makdon.AppMutex,Global\Makdon.AppMutex` di installer. Aplikasi membuat kedua nama itu (`InstallerMutex.Acquire`)
+  hanya di mode terpasang, dipegang sepanjang proses, dan mengabaikan galat. Portable tidak membuatnya.
+  `CloseApplications` (Restart Manager) tidak dipakai.
+- **Konsekuensi.** Installer dan uninstaller meminta pengguna menutup Makdon bila masih berjalan. Installer tidak melihat instance portable yang sedang
+  berjalan (sengaja: portable tidak boleh mengganggu instalasi). Penutupan oleh Restart Manager tidak didukung. Perilaku pemeriksaan oleh installer
+  **belum diverifikasi**.
+- **Bukti.** `installer/Makdon.iss:51-52`; `src/Makdon/InstallerMutex.cs:8-24`; `src/Makdon/AppInfo.cs:11-13`; `src/Makdon/App.xaml.cs:23`.
+
+## ADR-32 .NET 10 dan switch XPS di runtimeconfig
+
+- **Konteks.** .NET 9 berhenti didukung 2026-11-10; aplikasi self-contained membawa runtime ke pengguna (DISTRIBUTION §11).
+  .NET 10 membatasi font halaman XPS hanya dari paket yang sama. Paket XPS di memori (Pratinjau Cetak) juga menolak font miliknya sendiri,
+  sehingga setiap halaman bertekst gagal dan Pratinjau Cetak selalu gagal. `AppContext.SetSwitch` di kode tidak cukup karena WPF men-cache switch
+  saat gambar pertama dimuat.
+- **Keputusan.** Target `net10.0-windows`. `RuntimeHostConfigurationOption Switch.System.Windows.DisableXpsPackageBoundaryRestriction=true` di
+  `Makdon.csproj` dan `Makdon.Tests.csproj`. Test `XpsBoundarySwitchTests` memeriksa bahwa runtimeconfig Makdon memuat switch itu dan
+  proses test memasangnya juga. Alternatif yang tidak dipilih: menulis XPS ke berkas sementara.
+- **Konsekuensi.** Pembatasan batas paket XPS dimatikan untuk seluruh proses. Alasan aman: Makdon hanya membaca XPS buatannya sendiri
+  (risiko residual R14 di [SECURITY.md](SECURITY.md)). Setiap pindah versi .NET, switch dan perilaku ini harus diperiksa ulang.
+- **Bukti.** `src/Makdon/Makdon.csproj:33-42`; `src/Makdon.Tests/Makdon.Tests.csproj:24-26`; `src/Makdon.Tests/WpfHostStartupTests.cs:48-70`
+  (`XpsBoundarySwitchTests`).
+
+## ADR-33 `WpfHost` memakai `TestApp` tanpa `OnStartup`
+
+- **Konteks.** Konstruktor `Application` menitipkan pemanggilan `OnStartup` ke dispatcher, jadi `OnStartup` berjalan begitu `Dispatcher.Run` dimulai,
+  walau tanpa `Application.Run`. Sebelumnya host test membuat `App` biasa, sehingga startup sungguhan ikut berjalan: mutex/pipe single-instance
+  produksi, `MainWindow`, dan settings `%APPDATA%`. Bila Makdon sudah berjalan, test bisa meneruskan berkas ke instance itu lalu memanggil `Shutdown()`,
+  dan setiap test WPF sesudahnya gagal dengan "The Application object is being shut down".
+- **Keputusan.** `WpfHost.TestApp : App` menimpa `OnStartup` dengan kosong dan memuat resource `app.xaml` lewat `LoadAppXaml()`
+  (BAML dibaca langsung ke instance itu, isi resource tetap sama dengan App sungguhan). Pencatat galat dispatcher tetap dipasang.
+- **Konsekuensi.** Test tidak menjalankan `App.OnStartup` sama sekali; alur startup hanya bisa diuji secara terpisah (lihat TESTING "Yang tidak teruji").
+  `InitializeComponent` tidak dipakai di host test.
+- **Bukti.** `src/Makdon.Tests/Support/WpfHost.cs` (kelas `TestApp`); `src/Makdon.Tests/WpfHostStartupTests.cs:14-46`
+  (`TestHost_DoesNotRunAppStartup_AndKeepsTheApplicationAlive`, `TestHost_LoadsTheSameThemeResourcesAsApp`).

@@ -7,20 +7,20 @@ merangkum dan menambah langkah praktis. Gambaran arsitektur: [ARCHITECTURE.md](A
 
 ## 1. Setup
 
-- Windows (WPF) dan **.NET 9 SDK** (README: "Butuh .NET 9 SDK"). Tidak ada dependensi alat lain; paket NuGet dipulihkan otomatis oleh
-  `dotnet build`. Proyek memakai `net9.0-windows` (`src/Makdon/Makdon.csproj`), jadi tidak bisa dibangun di Linux/macOS.
-- Tidak ditemukan konfigurasi CI atau analyzer/`.editorconfig` di repo; penjaga kualitas saat ini adalah aturan "0 warning" dan test
-  (lihat bagian 6).
+- Windows (WPF) dan **.NET 10 SDK** (README: "Butuh .NET 10 SDK"). Tidak ada dependensi alat lain untuk build/test; paket NuGet dipulihkan otomatis
+  oleh `dotnet build`. Proyek memakai `net10.0-windows` (`src/Makdon/Makdon.csproj:5`), jadi tidak bisa dibangun di Linux/macOS.
+- CI hanya untuk rilis (`.github/workflows/release.yml`, dipicu tag `v*`); tidak ada CI per PR. Tidak ada analyzer atau `.editorconfig`;
+  penjaga kualitas saat ini adalah aturan "0 warning" dan test (lihat bagian 6).
 
 ```powershell
 dotnet build Makdon.sln                   # harus 0 warning, 0 error
 dotnet test src/Makdon.Tests              # xUnit; semua harus hijau
 dotnet run --project src/Makdon -- file.md
-dotnet publish src/Makdon -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet publish src/Makdon -p:PublishProfile=win-x64
 ```
 
-Hasil publish: `src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe` (butuh .NET 9 Desktop Runtime di mesin
-tujuan). `RuntimeIdentifier` sengaja tidak dipaksa di csproj agar build/test biasa tetap netral (komentar `Makdon.csproj:15-19`).
+Hasil publish: `src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe` (self-contained: runtime ikut dikemas, jadi
+.NET tidak perlu dipasang di mesin tujuan). Profil publish ada di `src/Makdon/Properties/PublishProfiles/win-x64.pubxml`. `RuntimeIdentifier` tidak dipaksa di `Makdon.csproj` agar build/test biasa tetap netral (komentar `Makdon.csproj:15-18`).
 Properti `<Version>` saat ini `0.1.0` (`Makdon.csproj:12`), sama dengan rilis awal di [../CHANGELOG.md](../CHANGELOG.md). Ubah keduanya bersama saat rilis.
 
 ## 2. Struktur folder
@@ -29,7 +29,10 @@ Properti `<Version>` saat ini `0.1.0` (`Makdon.csproj:12`), sama dengan rilis aw
 Makdon.sln
 CLAUDE.md, README.md, CHANGELOG.md
 docs/                       dokumentasi pengembangan (indeks: docs/README.md)
-scripts/                    register/unregister-file-association.ps1 (HKCU), generate-icon.ps1
+scripts/                    register/unregister-file-association.ps1 (HKCU), build-release.ps1, generate-icon.ps1
+installer/                  Makdon.iss (Inno Setup 6), Languages/Indonesian.isl
+.github/workflows/          release.yml (rilis pada tag v*)
+LICENSE, THIRD-PARTY-NOTICES.txt   lisensi MIT dan pemberitahuan pihak ketiga (ikut dalam setiap rilis)
 .claude/agents/             sub-agent proyek (kuli, tyas, kurang-kerjaan, pak-bos)
 src/Makdon/                 aplikasi WPF
     App.xaml(.cs)           titik masuk, single-instance, penangan galat global
@@ -38,6 +41,7 @@ src/Makdon/                 aplikasi WPF
     DocumentView.xaml(.cs)  editor + pratinjau + sinkron scroll
     FindReplaceBar.xaml(.cs), SearchEngine.cs, MarkdownEditing.cs
     TextFileIO.cs, FileStamp.cs, AppSettings.cs, SingleInstance.cs, CrashLog.cs
+    AppPaths.cs, AppInfo.cs, InstallerMutex.cs, RegistryStore.cs, FileAssociation.cs   mode/lokasi data, identitas, mutex installer, "Buka dengan"
     MarkdownSupport.cs, AnchorHeadingRenderer.cs, HtmlExporter.cs
     PrintLayout.cs          PageLayout, PrintSnapshot, PrintSource, PrintService, enum kertas/orientasi/margin
     HeaderFooterPaginator.cs, PreviewBuild.cs, PrintPreviewWindow.xaml(.cs)   Pratinjau Cetak
@@ -46,7 +50,7 @@ src/Makdon/                 aplikasi WPF
     ZoomLevel.cs, TextStats.cs, EncodingNames.cs, MarkdownFiles.cs, Assets/app.ico
 src/Makdon.Tests/           xUnit
     Support/                WpfHost.cs (+ DispatcherErrors, FailOnUnexpectedDispatcherErrorsAttribute), AssemblyInfo.cs,
-                            PrintTestKit.cs, TempDir.cs, TestLogRedirect.cs
+                            PrintTestKit.cs, TempDir.cs, TestLogRedirect.cs, FakeRegistryStore.cs
     *Tests.cs               peta berkas -> area ada di TESTING.md
 ```
 
@@ -78,7 +82,7 @@ Dari CLAUDE.md, dilengkapi pola yang konsisten terlihat di kode:
 ## 4. Cara menulis test
 
 Kerangka: xUnit 2.9.2 + `Microsoft.NET.Test.Sdk` 17.12.0 + coverlet.collector (`Makdon.Tests.csproj`), target
-`net9.0-windows`, `UseWPF`. `Xunit` dan `System.IO` sudah `<Using>` global.
+`net10.0-windows`, `UseWPF`. `Xunit` dan `System.IO` sudah `<Using>` global.
 
 ### 4.1 Pola yang dipakai
 
@@ -166,6 +170,8 @@ public class ContohTests : IDisposable
    ada: jendela ditutup di `Dispose` kelas test dan `PreviewBuild` di-`Dispose`, supaya paket XPS dan timer tidak tertinggal ke test berikutnya.
 9. **Dokumen cetak tidak boleh memuat path lokal.** Jalur cetak tidak boleh memakai `CreateErrorDocument` (memuat `CrashLog.LogPath`); kegagalan render harus
    dilempar (`throwOnFailure: true`) dan ditampilkan di layar. Kaki halaman hanya memuat nama berkas. Lihat [SECURITY.md](SECURITY.md#212-pratinjau-cetak-dan-cetak).
+10. **Lokasi data dan registri lewat seam.** `settings.json` dan `crash.log` hanya lewat `AppPaths`; test menyuntikkan folder palsu lewat `AppPaths.Detect(folder, markerExists: ...)`. `FileAssociation` hanya menulis lewat `IRegistryStore`; test memakai `FakeRegistryStore`. Jangan memanggil `Environment.GetFolderPath` atau `Microsoft.Win32.Registry` langsung dari kode yang diuji.
+11. **Host test WPF tidak menjalankan `App.OnStartup`.** Jangan mengganti `WpfHost.TestApp` dengan `App` biasa: startup sungguhan membuat mutex/pipe produksi, `MainWindow`, dan membaca settings pengguna ([ADR-33](DESIGN-DECISIONS.md#adr-33-wpfhost-memakai-testapp-tanpa-onstartup)).
 
 ## 5. Cara menambah
 
@@ -220,7 +226,7 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
 - `MainWindow.xaml`: `RoutedUICommand` + `CommandBinding` + `KeyBinding` (Ctrl+1/2/3 saat ini) + item menu + `RadioButton`
   segmented control (`ViewModeConverter` dengan `ConverterParameter` = nama enum).
 - `MainWindow.ViewMode_Executed` memetakan **teks** `RoutedUICommand` ("Editor", "Pratinjau", selain itu Terpisah)
-  (`MainWindow.xaml.cs:633-642`): tambahkan cabangnya, atau ubah ke pemetaan yang eksplisit.
+  (`MainWindow.xaml.cs:795-804`): tambahkan cabangnya, atau ubah ke pemetaan yang eksplisit.
 - `ViewModeLabelConverter`, `EditorVisibleConverter` (`Converters.cs`), `CanEdit_CanExecute`/`CanFormat_CanExecute`.
 - Sesi: `SessionTab.Mode` disimpan sebagai teks nama enum dan `ParsedMode` jatuh ke `Split` untuk nilai tak dikenal
   (`AppSettings.cs:15`). **Mengganti nama anggota enum yang ada membuat sesi lama kembali ke Terpisah.**
@@ -231,7 +237,7 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
 
 1. `MarkdownFiles.Extensions` (`MarkdownFiles.cs:5`): dipakai seret-lepas dan klik tautan relatif. Saat ini `.md .markdown .mdown
    .mkd .txt`.
-2. Filter dialog `OpenFilter`/`SaveFilter` di `MainWindow.xaml.cs:15-16` (string terpisah; `.txt` ada di filter sendiri).
+2. Filter dialog `OpenFilter`/`SaveFilter` di `MainWindow.xaml.cs:16-17` (string terpisah; `.txt` ada di filter sendiri).
 3. Asosiasi file: default `-Extensions` di `scripts/register-file-association.ps1` dan `unregister-file-association.ps1` adalah
    `.md` dan `.markdown`; `-Extensions` dinormalkan ke huruf kecil lalu divalidasi `^\.[a-z0-9]+$`.
 4. Test: `MarkdownFilesTests.IsMarkdown_ByExtension` (`HtmlAndMarkdownSupportTests.cs:9-31`). README (Asosiasi file).
@@ -260,6 +266,7 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
 - [ ] Tidak ada fitur di luar permintaan; temuan lain dilaporkan terpisah.
 - [ ] Dokumentasi diperbarui bila perilaku berubah: [../README.md](../README.md) (fitur, pintasan, batasan), [../CLAUDE.md](../CLAUDE.md)
   (bila aturan/struktur berubah), dokumen di `docs/`, dan [../CHANGELOG.md](../CHANGELOG.md).
+- [ ] Perubahan identitas (`AppId`, nama mutex `Makdon.AppMutex`, tabel registri DISTRIBUTION 4.1, switch XPS) diubah serentak di semua tempat yang tercantum di CLAUDE.md. Perubahan installer atau skrip registri diuji dengan `-WhatIf` atau di VM.
 - [ ] Tidak ada commit/push otomatis; commit hanya bila diminta.
 
 ## 7. Larangan (dari CLAUDE.md)
@@ -283,6 +290,9 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
 - Test tidak boleh menyentuh `%APPDATA%`/registri/`crash.log` pengguna; pakai scope unik pada `SingleInstance.Create(scope)`.
 - **Jangan menjalankan skrip registri sungguhan** (`register/unregister-file-association.ps1`) tanpa `-WhatIf` lebih dulu; skrip ini
   menulis ke HKCU.
+- Jangan mengubah `AppId` installer atau nama mutex `Makdon.AppMutex`, dan jangan menghapus switch `DisableXpsPackageBoundaryRestriction` ([ADR-31](DESIGN-DECISIONS.md#adr-31-mutex-installer-bernama-tetap-makdonappmutex-bukan-restart-manager), [ADR-32](DESIGN-DECISIONS.md#adr-32-net-10-dan-switch-xps-di-runtimeconfig)).
+- Jangan memindahkan data portable diam-diam ke `%APPDATA%`, dan jangan menaruh penanda `Makdon.portable` di bahan installer atau folder rilis ([ADR-28](DESIGN-DECISIONS.md#adr-28-mode-portable-lewat-penanda-makdonportable-data-di-data)).
+- Jangan menulis registri dari kode di luar `FileAssociation`/`IRegistryStore`.
 - Jangan commit atau push kecuali diminta.
 
 ## 8. Sub-agent proyek (`.claude/agents/`)
@@ -300,3 +310,20 @@ isi folder itu, bukan daftar agen di klien; jika agen tidak muncul di daftar, pe
 Alur yang masuk akal (saran, bukan aturan repo): `kuli` mengimplementasikan -> `kurang-kerjaan` menambah test -> `pak-bos` me-review
 `git diff`; bila ada test merah atau galat yang belum dipahami, `tyas` menyelidiki. Setiap agen melaporkan hasil verifikasi apa adanya,
 termasuk kegagalan.
+
+## 9. Membuat rilis
+
+Rilis dipicu tag `v<versi>`; rancangan lengkapnya di [DISTRIBUTION.md](DISTRIBUTION.md) §8. Gagal bila tag tidak sama dengan `<Version>`.
+
+1. Naikkan `<Version>` di `src/Makdon/Makdon.csproj` (satu sumber; skrip dan CI membacanya) dan pindahkan entri `[Unreleased]` di
+   [../CHANGELOG.md](../CHANGELOG.md) ke versi dan tanggal baru.
+2. Bangun lokal dengan `powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1`. Skrip ini build (0 warning), test, publish profil
+   `win-x64`, menyusun isi rilis, membangun installer, membuat zip portable, lalu `SHA256SUMS.txt`. Setiap run menghapus `artifacts\<versi>\` lebih dulu.
+   - Tanpa Inno Setup 6 terpasang, installer dilewati dengan peringatan. Pakai `-IsccPath` untuk lokasi `ISCC.exe`, `-RequireInstaller` untuk gagal bila installer tidak jadi.
+   - `-SkipTests` hanya untuk percobaan cepat, jangan dipakai untuk rilis.
+   - `-VerifyInstallerContents` memasang installer ke folder sementara lalu mencopotnya, dan menulis HKCU sementara. Skrip menolaknya di luar CI (`GITHUB_ACTIONS=true`) kecuali dengan `-Force`, dan menolak bila kunci uninstall Makdon sudah ada (`scripts/build-release.ps1:174-188`).
+3. Keluaran di `artifacts\<versi>\`: `Makdon-<versi>-setup-x64.exe`, `Makdon-<versi>-portable-x64.zip`, `SHA256SUMS.txt`.
+4. Uji installer dan zip dengan checklist "Distribusi" di [TESTING.md](TESTING.md#checklist-uji-manual-sebelum-rilis).
+5. Commit perubahan versi dan CHANGELOG (hanya bila diminta), buat tag `v<versi>`, lalu push tag. Workflow `release.yml` membuat
+   draft rilis, mengunggah tiga aset, dan mempublikasikannya. Rilis yang sudah terbit tidak boleh diganti (immutable releases, **belum diverifikasi**
+   di repo); bila salah, terbitkan versi baru.

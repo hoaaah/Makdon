@@ -5,13 +5,13 @@ manual sebelum rilis.
 **Pembaca:** pengembang yang menjalankan/menulis test dan orang yang menyiapkan rilis. Cara menulis test baru (pola dan aturan):
 [CONTRIBUTING.md](CONTRIBUTING.md#4-cara-menulis-test).
 
-Catatan kejujuran: dokumen ini disusun dengan membaca kode. Run terakhir (2026-10-08, `dotnet test src/Makdon.Tests`): 1455 kasus
-lulus, 0 gagal, 0 dilewati (durasi sekitar 55 dtk; sebelum fitur Pratinjau Cetak: 1168 kasus, sekitar 22 dtk). Jumlah test di tabel = jumlah atribut `[Fact]`/`[Theory]` per berkas (hasil `grep`), bukan jumlah
-kasus yang dieksekusi; satu `[Theory]` bisa menjadi banyak kasus. Total 800 atribut di 24 berkas.
+Catatan kejujuran: dokumen ini disusun dengan membaca kode. Run terakhir (2026-10-08, `dotnet test src/Makdon.Tests`): 1543 kasus
+lulus, 0 gagal, 0 dilewati (sebelum fitur Pratinjau Cetak: 1168 kasus, sekitar 22 dtk; sebelum fitur distribusi: 1455 kasus). Jumlah test di tabel = jumlah atribut `[Fact]`/`[Theory]` per berkas (hasil `grep`), bukan jumlah
+kasus yang dieksekusi; satu `[Theory]` bisa menjadi banyak kasus. Total 861 atribut di 27 berkas.
 
 ## Peta test: berkas -> area
 
-Proyek `src/Makdon.Tests` (xUnit 2.9.2, `net9.0-windows`). `[W]` = kelas bertanda `[Collection("Wpf")]` (berjalan lewat `WpfHost`).
+Proyek `src/Makdon.Tests` (xUnit 2.9.2, `net10.0-windows`). `[W]` = kelas bertanda `[Collection("Wpf")]` (berjalan lewat `WpfHost`).
 
 | Berkas | Atribut | Kelas (area) |
 | --- | --- | --- |
@@ -39,7 +39,10 @@ Proyek `src/Makdon.Tests` (xUnit 2.9.2, `net9.0-windows`). `[W]` = kelas bertand
 | `PrintContentAndCommandTests.cs` | 23 | `[W]` Dokumen cetak (kertas putih, tema Terang walau aplikasi Gelap, dokumen independen), kegagalan render (`DocumentView.RenderFaultForTests`: pesan ramah tanpa path, bukan dokumen galat), gambar rusak/hilang/valid, ftp/UNC/`file://host`/`data:`/`javascript:` diblokir tanpa koneksi (listener TCP lokal), flag blokir remote dari snapshot, `AppCommands.PrintPreview` (Ctrl+Shift+P) dan keunikan pintasan (membaca teks `MainWindow.xaml`), pengkabelan menu/toolbar, Ctrl+P di panel pratinjau utama, `ApplyTicket`/`TicketMatches`/`DescribeTicket` tanpa printer |
 | `PrintPreviewWindowBehaviorTests.cs` | 42 | `[W]` Kontrol jendela Pratinjau Cetak: pengaturan halaman membangun siklus baru, navigasi (Pertama/Sebelumnya/Berikutnya/Terakhir, kotak halaman, batas), zoom, Esc/Tutup, tombol dan perintah Cetak (via `ShowPrintDialogForTests`), galat dari callback/pembatalan, parse tertahan dan dokumen besar, snapshot tab yang ditutup atau dipindah |
 | `WpfHostErrorTrackingTests.cs` | 4 | `[W]` Pencatat galat dispatcher: galat tak terduga menggagalkan test (sekali), galat dalam `ExpectUnhandled` tidak, galat sesudah scope tetap dilaporkan, galat saat memompa di dalam `Run` tidak menggantung proses |
-| `Support/WpfHost.cs` (+ `DispatcherErrors`, `FailOnUnexpectedDispatcherErrorsAttribute`), `Support/AssemblyInfo.cs`, `Support/PrintTestKit.cs`, `TempDir.cs`, `TestLogRedirect.cs` | - | Infrastruktur (lihat berikut). `PrintTestKit`: halaman kecil `Small` 360 x 420, dokumen contoh, `StartBuild`/`WaitForEnd`/`WaitForPaginated`, pembaca teks glyph halaman XPS dan teks kaki |
+| `FileAssociationTests.cs` | 43 | `FileAssociation` dengan `FakeRegistryStore` (tanpa registri asli): `Register` menulis tepat tabel DISTRIBUTION 4.1 di HKCU, tanpa nilai bawaan ekstensi dan `UserChoice`, dan memberi tahu shell sekali; deteksi instalasi (kunci Inno `_is1` di HKCU/HKLM, `WOW6432Node`, path dengan kutip, path tak valid); penolakan bila terpasang (termasuk semua pengguna); klasifikasi exe terdaftar (basi, portable lain, tanpa penanda, di dalam folder instalasi); `Unregister` hanya milik exe ini; `CheckStartup` (tanpa penulisan); `ExtractExePath`; `IsUnderFolder` (pemisah di akhir) Ditambahkan setelah review: perintah relatif tidak dinormalkan terhadap folder kerja (`RelativeCommand_*`), path UNC tanpa pemeriksaan berkas (`IsNetworkPath_*`, `UncRegistration_*`, `UncInstallationPath_*`), dan `Register` menolak exe yang bukan `Makdon.exe` atau tidak ada (`Register_WhenTheExeWasRenamed_*`). |
+| `AppPathsTests.cs` | 14 | `AppPaths` (`Detect` dengan penanda dan folder data, `SingleInstanceScope` stabil dan berbeda per folder, `IsDataDirectoryWritable`: portable membuat `data\` tanpa meninggalkan berkas uji, folder yang tak bisa ditulisi = false tanpa melempar; terpasang tidak menyentuh apa pun); `InstallerMutexTests` (portable tidak membuat mutex installer) |
+| `WpfHostStartupTests.cs` | 4 | `[W]` `TestHost_*`: host test tidak menjalankan `App.OnStartup` dan tetap hidup; resource tema sama dengan App. `XpsBoundarySwitchTests`: runtimeconfig Makdon dan proses test memuat `Switch.System.Windows.DisableXpsPackageBoundaryRestriction` (lihat ADR-32) |
+| `Support/WpfHost.cs` (+ `DispatcherErrors`, `FailOnUnexpectedDispatcherErrorsAttribute`), `Support/AssemblyInfo.cs`, `Support/PrintTestKit.cs`, `TempDir.cs`, `TestLogRedirect.cs` | - | Infrastruktur (lihat berikut). `PrintTestKit`: halaman kecil `Small` 360 x 420, dokumen contoh, `StartBuild`/`WaitForEnd`/`WaitForPaginated`, pembaca teks glyph halaman XPS dan teks kaki `Support/FakeRegistryStore.cs`: `IRegistryStore` di memori (nama tak peka huruf, kunci induk dibuat saat menulis, `Mutations` menghitung operasi tulis/hapus); `TestApp` di `WpfHost` (lihat di bawah). |
 
 Peta area -> berkas untuk keamanan dan keputusan ada di [SECURITY.md](SECURITY.md) dan [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md).
 
@@ -70,9 +73,7 @@ dotnet test Makdon.sln                                                          
 ## Thread STA dan `WpfHost`
 
 - WPF mensyaratkan thread STA dan `Application` adalah singleton per proses. `WpfHost.Instance` (`Support/WpfHost.cs`) membuat **satu**
-  thread STA latar (`IsBackground = true`, nama `Makdon.Tests STA`), membuat satu `App` (`ShutdownMode.OnExplicitShutdown`, memanggil
-  `InitializeComponent()` sehingga resource tema/kontrol dimuat, **tanpa** `OnStartup`: tidak ada single-instance, tidak ada
-  `MainWindow`), lalu `Dispatcher.Run()`.
+  thread STA latar (`IsBackground = true`, nama `Makdon.Tests STA`), membuat satu `TestApp` (turunan `App`, `ShutdownMode.OnExplicitShutdown`, memuat resource `app.xaml` lewat `LoadAppXaml()`, **tanpa** `OnStartup`: tidak ada single-instance, tidak ada `MainWindow`, tidak ada mutex installer atau settings `%APPDATA%`; lihat [ADR-33](DESIGN-DECISIONS.md#adr-33-wpfhost-memakai-testapp-tanpa-onstartup)), lalu `Dispatcher.Run()`.
 - Semua test yang menyentuh WPF memanggil `WpfHost.Instance.Run(() => ...)` dan kelasnya `[Collection("Wpf")]`. `Run` bukan sekadar
   `Dispatcher.Invoke`: operasi dijalankan dengan `InvokeAsync` dan ditunggu per 100 ms (`WpfHost.cs:74-104`); galat milik test (mis. `Assert`)
   ditangkap di thread STA lalu dilempar ulang di thread test. Alasannya (komentar `WpfHost.cs:67-73`): bila callback tertunda melempar saat test
@@ -88,7 +89,7 @@ dotnet test Makdon.sln                                                          
   satu sama lain, jadi tidak boleh berbagi state statis. State statis yang disentuh test dan harus dipulihkan: `DocumentView.BlockRemoteImages`,
   `ThemeManager` (mode/kamus), `CrashLog.LogPath`, `CultureInfo.CurrentCulture`.
 - `TestLogRedirect` (`[ModuleInitializer]`) mengalihkan `CrashLog.LogPath` ke `%TEMP%\Makdon.Tests\crash-<pid>.log` saat assembly test dimuat.
-- **Pencatat galat dispatcher** (`Support/WpfHost.cs`). `OnStartup` `App` tidak berjalan di test, jadi `WpfHost` memasang sendiri
+- **Pencatat galat dispatcher** (`Support/WpfHost.cs`). `OnStartup` `TestApp` kosong, jadi `WpfHost` memasang sendiri
   `DispatcherUnhandledException` yang memasukkan galat ke `DispatcherErrors.Queue` (`WpfHost.Unhandled`) dan menandainya `Handled` (proses
   test tidak mati, seperti galat yang dipulihkan di aplikasi). Atribut tingkat assembly `[assembly: FailOnUnexpectedDispatcherErrors]`
   (`Support/AssemblyInfo.cs:4`, kelas `FailOnUnexpectedDispatcherErrorsAttribute`, turunan `BeforeAfterTestAttribute`) memeriksa di akhir
@@ -111,8 +112,8 @@ Diperiksa dengan `grep` terhadap `src/Makdon.Tests`; "tidak teruji" berarti tida
 
 | Area | Keterangan |
 | --- | --- |
-| **`MainWindow`** (seluruh isi) | Tidak ada test yang membuat `MainWindow` (satu-satunya sebutan: komentar di `DocumentTabConflictEdgeTests.cs:71`; dua test cetak hanya membaca teks `MainWindow.xaml` dengan regex untuk pengkabelan perintah dan keunikan pintasan, `PrintContentAndCommandTests.cs:333, 369`). Tidak teruji: `OpenFile` (cek ukuran 50/500 MB, OOM, tab ganda), antrean konflik (`conflictQueue`/`conflictPromptOpen`), `OnSaveConflict`, `TrySave` (konfirmasi lossy), `preserveStoredSession`/`RestoreSession`/`SaveSettings`, `OpenFromOtherInstance`, seret-lepas, daftar berkas terakhir, handler perintah, `Window_Closing`, handler `ExportHtml_Executed`/`Print_Executed`/`PrintPreview_Executed` (penangkapan OOM/galat saat membuat jendela pratinjau dan `ShowDialog` modal). Logika di bawahnya (`DocumentTab`, `AppSettings`, `SingleInstance`, model cetak) teruji terpisah. |
-| **`App`** | `OnStartup` (urutan single-instance), `OnDispatcherUnhandledException` (keputusan fatal/pulih + dialog), `OnExit`. `CrashLog.IsRecoverable`/`ShouldShowDialog` teruji; pemakaiannya tidak. |
+| **`MainWindow`** (seluruh isi) | Tidak ada test yang membuat `MainWindow` (satu-satunya sebutan: komentar di `DocumentTabConflictEdgeTests.cs:71`; dua test cetak hanya membaca teks `MainWindow.xaml` dengan regex untuk pengkabelan perintah dan keunikan pintasan, `PrintContentAndCommandTests.cs:333, 369`). Tidak teruji: `OpenFile` (cek ukuran 50/500 MB, OOM, tab ganda), antrean konflik (`conflictQueue`/`conflictPromptOpen`), `OnSaveConflict`, `TrySave` (konfirmasi lossy), `preserveStoredSession`/`RestoreSession`/`SaveSettings`, `OpenFromOtherInstance`, seret-lepas, daftar berkas terakhir, handler perintah, `Window_Closing`, handler `ExportHtml_Executed`/`Print_Executed`/`PrintPreview_Executed` (penangkapan OOM/galat saat membuat jendela pratinjau dan `ShowDialog` modal). Logika di bawahnya (`DocumentTab`, `AppSettings`, `SingleInstance`, model cetak) teruji terpisah. Sejak fitur distribusi juga tidak teruji: `RunPortableStartupChecks`, `RegisterAssociation_Click`, `UnregisterAssociation_Click`, `ExplorerIntegration_SubmenuOpened`, dan `About_Click`. |
+| **`App`** | `OnStartup` (urutan single-instance), `OnDispatcherUnhandledException` (keputusan fatal/pulih + dialog), `OnExit`. `CrashLog.IsRecoverable`/`ShouldShowDialog` teruji; pemakaiannya tidak. Sejak fitur distribusi juga tidak teruji: `InstallerMutex.Acquire` dan pemilihan scope portable. |
 | **Dialog** | `ChoiceDialog` diuji sendiri (2 test). Dialog sistem (`OpenFileDialog`, `SaveFileDialog`, `MessageBox`) tidak teruji. `PrintDialog` tidak pernah dibuka di test: tombol/perintah Cetak di jendela pratinjau diuji lewat hook `PrintPreviewWindow.ShowPrintDialogForTests` yang dipakai dengan hasil "batal" saja (`PrintPreviewWindowBehaviorTests.cs:889, 921`). `ConfirmPaperMatchesPreview` (dan `ChoiceDialog` konfirmasi kertas) tidak dijalankan test mana pun; yang teruji hanya pembantu murninya (`TicketMatches`, `ApplyTicket`, `DescribeTicket`, `PrintContentAndCommandTests.cs:421-528`). |
 | **Cetak** | **Teruji:** pembuatan dokumen cetak (`BuildPrintDocument`/`PrintService.CreateDocument`: teks hasil, penanda gambar, kertas putih, tema Terang, ukuran halaman dan margin), paginasi dan ukuran halaman (seluruh kombinasi kertas x orientasi x margin, `FromPrintableArea` dengan nilai tak masuk akal), kaki halaman, `PreviewBuild` (tahap, halaman XPS, `Dispose`, paket di `PackageStore`), jendela pratinjau (pengaturan, navigasi, zoom, tutup, snapshot), pemblokiran gambar remote/UNC/ftp/`data:` pada dokumen cetak. **Tidak teruji:** pencetakan nyata (`dialog.PrintDocument` tidak pernah dijalankan: tidak ada printer fisik, driver, atau "Microsoft Print to PDF" di test), `PrintService.Print` dan `Print_Executed` (Ctrl+P), cabang "dialog diterima" termasuk `ConfirmPaperMatchesPreview`, tampilan piksel halaman (test membaca teks glyph, ukuran, dan kotak kaki, bukan gambar), gambar `http(s)` yang dimuat async di halaman XPS, OOM saat mencetak, dokumen Markdown sangat besar (kinerja tidak diukur otomatis; lihat README, Batasan yang diketahui). |
 | **Visual/tampilan** | Tata letak, gaya `Controls.xaml`/`Preview.xaml`, tampilan tema sebenarnya, DPI tinggi, ikon, title bar gelap (`ApplyTitleBar`), keadaan kosong. Tema hanya diuji sebatas penukaran kamus dan matematika kontras; **kesamaan kunci Light/Dark tidak diuji** (hanya komentar). |
@@ -122,21 +123,22 @@ Diperiksa dengan `grep` terhadap `src/Makdon.Tests`; "tidak teruji" berarti tida
 | **Watcher end-to-end** | `FileSystemWatcher` -> `dispatcher.BeginInvoke` -> `changeTimer` 400 ms -> `CheckExternalChange` tidak diuji sebagai satu rangkaian; test memanggil `CheckExternalChange()` langsung. Hingga 5 percobaan baca (1 + 4 ulangan) untuk file terkunci hanya diuji sebagai "tidak melempar". |
 | **Symlink** | Butuh hak membuat symlink (Developer Mode atau administrator). Test symlink (`WriteBytesAtomic_SymlinkTarget_*`, `ResolveLinkTarget_FollowsAChain*`, `*_BrokenSymlink_*`) **langsung `return` (lulus tanpa menguji apa pun)** bila `CreateSymbolicLink` ditolak; hasil hijau tidak membuktikan jalur itu. Cabang ekspor "symlink di dalam folder menunjuk ke luar" (`MarkdownSupport.cs:333-334`) tidak punya test sama sekali. |
 | **Keamanan pipe lintas-pengguna** | `CurrentUserOnly` tidak diuji menolak pengguna lain (butuh akun kedua). |
-| **Skrip** | `scripts/*.ps1` (registrasi/hapus asosiasi, pembuat ikon) tidak punya test; CLAUDE.md melarang menjalankan skrip registri sungguhan dari test. |
+| **Skrip** | `scripts/*.ps1` (registrasi/hapus asosiasi, pembuat ikon) tidak punya test; CLAUDE.md melarang menjalankan skrip registri sungguhan dari test. Juga tidak diuji: `scripts/build-release.ps1` dan `.github/workflows/release.yml` (hanya bisa dijalankan di mesin rilis atau CI). |
 | **Ketahanan memori** | Jalur `OutOfMemoryException` di `OpenFile`, `ExportHtml_Executed`, `Print_Executed`, `PrintPreview_Executed`, dan render; batas 50/500 MB. Satu-satunya yang teruji: `PreviewBuild.Guard` mengubah OOM yang dilempar penerima `Changed` (buatan test) menjadi tahap `Failed` tanpa lolos ke dispatcher (`SubscriberThatThrows_FailsTheBuild_AndNeverReachesTheDispatcher`, `PreviewBuildTests.cs:468`); kehabisan memori sungguhan pada dokumen sangat besar tidak diuji. |
 | **Registri tema** | `ThemeManager.SystemUsesLightTheme` dan `Apply(System)` hanya diuji terhadap nilai registri mesin yang menjalankan test (hanya baca); perubahan tema sistem saat berjalan (`UserPreferenceChanged`) tidak diuji. |
-| **Multi-instance sungguhan / multi-sesi** | Test memakai scope unik dalam satu proses; peluncuran proses kedua sungguhan dan sesi Remote Desktop tidak diuji. |
+| **Multi-instance sungguhan / multi-sesi** | Test memakai scope unik dalam satu proses; peluncuran proses kedua sungguhan dan sesi Remote Desktop tidak diuji. Mode portable (scope per folder exe) juga tidak diuji dengan dua proses sungguhan. |
 | **Keamanan thread `MarkdownPipeline`** | Pipeline statis dipakai dari thread latar dan UI; tidak ada test konkurensi. |
+| **Registri nyata dan installer** | Penulisan ke HKCU/HKLM sungguhan tidak diuji: `WindowsRegistryStore` tanpa test, dan semua test `FileAssociation` memakai `FakeRegistryStore`. Installer Inno Setup (`installer/Makdon.iss`, `Indonesian.isl`) belum pernah dikompilasi; `AppMutex`, dialog uninstall, dan `InitializeSetup` tidak punya test otomatis. Lihat checklist distribusi di bawah. |
 
 ## Checklist uji manual sebelum rilis
 
-Jalankan pada build **publish** (`dotnet publish src/Makdon -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true`,
-hasil di `src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe`), idealnya di mesin/akun uji dengan .NET 9 Desktop Runtime.
-Centang tiap butir; catat versi Windows dan DPI.
+Jalankan pada build **publish** (`dotnet publish src/Makdon -p:PublishProfile=win-x64`, hasil di `src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe`; self-contained, jadi tidak perlu .NET terpasang di mesin uji). Untuk rilis, uji juga installer dan zip hasil `scripts\build-release.ps1`. Centang tiap butir; catat versi Windows (build), edisi, dan DPI.
 
 **Build dan paket**
 - [ ] `dotnet build Makdon.sln` 0 warning, 0 error; `dotnet test src/Makdon.Tests` hijau (dan periksa test symlink berjalan, bukan lulus kosong, mis. dengan Developer Mode aktif).
-- [ ] `Makdon.exe` hasil publish berjalan tanpa folder lain; ikon dan judul jendela benar; versi sesuai ([../CHANGELOG.md](../CHANGELOG.md)).
+- [ ] `Makdon.exe` hasil publish berjalan dari foldernya (DLL ikut ada) tanpa .NET terpasang; ikon dan judul jendela benar; Bantuan > Tentang menampilkan versi yang sesuai ([../CHANGELOG.md](../CHANGELOG.md)).
+- [ ] `scripts\build-release.ps1 -VerifyInstallerContents` hanya dijalankan di CI, atau dengan `-Force` di mesin yang pasti tidak punya instalasi Makdon.
+- [ ] `scripts\build-release.ps1` (tanpa `-SkipTests`) selesai dengan 0 warning; `artifacts\<versi>\` berisi installer, zip portable, dan `SHA256SUMS.txt` yang cocok dengan `Get-FileHash`.
 
 **Startup dan single-instance**
 - [ ] Tanpa argumen: keadaan kosong tampil; tanpa argumen + sesi tersimpan: tab, mode, dan posisi caret dipulihkan.
@@ -189,10 +191,35 @@ Centang tiap butir; catat versi Windows dan DPI.
 - [ ] Buka beberapa tab, tutup, buka lagi: sesi pulih. Buka lewat argumen file lalu tutup: sesi tersimpan sebelumnya **tidak** tertimpa; buka tab lagi di instance itu (dialog Buka/seret-lepas/Berkas Terakhir) lalu tutup: sesinya tersimpan.
 - [ ] Berkas Terakhir (maks 10); entri yang file-nya hilang menampilkan pesan dan dihapus.
 - [ ] `settings.json` dirusak manual: aplikasi tetap terbuka dengan bawaan.
-- [ ] Setelah galat yang dipulihkan (mis. gambar rusak), `%LOCALAPPDATA%\Makdon\crash.log` terisi; galat fatal: tidak ada cara memicu dari rilis (belum diverifikasi manual; gunakan build debug bila perlu).
+- [ ] Setelah galat yang dipulihkan (mis. gambar rusak), `%LOCALAPPDATA%\Makdon\crash.log` (terpasang) atau `data\crash.log` (portable) terisi; galat fatal: tidak ada cara memicu dari rilis (belum diverifikasi manual; gunakan build debug bila perlu).
 
 **Skrip asosiasi file (di akun/VM uji)**
 - [ ] `scripts\register-file-association.ps1 -WhatIf` tidak mengubah apa pun; tanpa `-WhatIf` mendaftar di HKCU; "Buka dengan" menampilkan Makdon; `unregister-file-association.ps1` membersihkan (dan memulihkan nilai bawaan bila `-SetDefault` dipakai).
+
+**Distribusi: installer (akun/VM bersih, Windows 10 dan 11)**
+- [ ] Pasang per pengguna (bawaan, tanpa UAC) ke `%LOCALAPPDATA%\Programs\Makdon`: Start Menu berisi Makdon, `Makdon.exe` berjalan, `HKCU\Software\Classes\Makdon.Markdown` dan `Applications\Makdon.exe` ada, dan "Buka dengan" menampilkan Makdon untuk `.md`.
+- [ ] Pasang untuk semua pengguna (meminta admin) ke `Program Files`: kunci berada di HKLM dan pengguna lain melihat Makdon di "Buka dengan". Pindah mode (per pengguna lalu semua pengguna, atau sebaliknya): catat apakah dua instalasi dengan AppId sama muncul (**belum diverifikasi**).
+- [ ] Upgrade: pasang versi lebih baru di atas versi lama. Berkas diganti, `%APPDATA%\Makdon\settings.json` tetap, dan aplikasi berjalan. Periksa sisa DLL versi lama tidak mengganggu (**belum diverifikasi**).
+- [ ] Downgrade ditolak: pasang versi lebih lama menampilkan pesan "sudah terpasang, lebih baru" dan pemasangan batal.
+- [ ] Makdon sedang berjalan saat pasang atau uninstall: installer dan uninstaller meminta Makdon ditutup (AppMutex). Dokumen yang belum disimpan tetap ditanya lewat dialog simpan (**belum diverifikasi**).
+- [ ] Uninstall interaktif: pertanyaan "Hapus juga pengaturan dan catatan galat Makdon?" muncul dengan bawaan Tidak. Tidak → `%APPDATA%\Makdon` dan `%LOCALAPPDATA%\Makdon` tetap. Ya → keduanya terhapus.
+- [ ] Uninstall pada instalasi semua pengguna: tidak menghapus apa pun dan menampilkan informasi bahwa data tiap pengguna tetap ada.
+- [ ] Uninstall `/VERYSILENT`: tidak ada dialog, data tetap ada.
+- [ ] Setelah uninstall, kunci "Buka dengan" Makdon hilang (`Makdon.Markdown`, `Applications\Makdon.exe`, nilai Makdon di `OpenWithProgids`, `Software\Makdon` bila kosong). Nilai bawaan `.md` tidak berubah.
+
+**Distribusi: portable dan "Buka dengan"**
+- [ ] Ekstrak zip ke folder baru, jalankan: `Makdon.portable` ada, `data\settings.json` dibuat saat pengaturan berubah, dan tidak ada berkas baru di `%APPDATA%\Makdon` atau `%LOCALAPPDATA%\Makdon`.
+- [ ] Folder tidak bisa ditulisi (mis. di `Program Files` sebagai pengguna biasa): pesan "Folder data portable tidak bisa ditulisi" muncul sekali; pengaturan tidak disimpan dan tidak pindah ke `%APPDATA%`.
+- [ ] Berkas > Integrasi Explorer hanya tampil di mode portable. Daftarkan → pesan sukses dan "Buka dengan" menampilkan Makdon. Cabut pendaftaran → pesan sukses; ulangi → "tidak ada yang dihapus".
+- [ ] Portable saat versi terpasang ada: Daftarkan ditolak dengan pesan, dan tidak ada kunci `Makdon.Markdown` baru di HKCU.
+- [ ] Instalasi ada dan HKCU masih menunjuk portable ini: saat startup muncul tawaran "Cabut Pendaftaran". "Biarkan" tidak mengubah apa pun.
+- [ ] Path basi: daftarkan dari folder A, pindahkan ke folder B, jalankan dari B. Tawaran "Perbarui" muncul; "Perbarui" membuat path menunjuk B; "Biarkan" tidak mengubah.
+- [ ] Exe lain sudah terdaftar (mis. hasil skrip pengembangan, atau portable lain yang masih ada): Daftarkan meminta konfirmasi; "Batal" tidak mengubah; "Ganti" menimpa (exe tanpa penanda diberi peringatan).
+- [ ] Single-instance: portable dan terpasang bisa berjalan bersamaan. Membuka `.md` lewat portable tidak diteruskan ke instance terpasang, dan sebaliknya. Dua salinan portable di folder berbeda juga tidak saling meneruskan.
+- [ ] Bantuan > Tentang Makdon menampilkan versi, mode (Terpasang/Portable), dan lisensi MIT; "Buka Halaman Rilis" membuka peramban.
+
+**Pratinjau Cetak pada hasil publish**
+- [ ] Pratinjau Cetak (Ctrl+Shift+P) pada hasil publish menampilkan halaman bertekst dengan font. `Makdon.runtimeconfig.json` memuat `Switch.System.Windows.DisableXpsPackageBoundaryRestriction: true` (ADR-32). Tanpa switch ini pratinjau gagal; uji ini adalah pemeriksaan utama setelah upgrade .NET.
 
 **Aksesibilitas ringan**
 - [ ] Navigasi keyboard (Tab/Ctrl+Tab), fokus terlihat, nama kontrol terbaca pembaca layar (properti `AutomationProperties.Name` ada di XAML; kualitasnya belum diverifikasi).

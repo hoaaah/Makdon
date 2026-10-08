@@ -1,6 +1,6 @@
 # Makdon
 
-Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit di kiri, lihat hasilnya langsung di kanan.
+Editor dan pratinjau Markdown untuk Windows (WPF, .NET 10). Buka file `.md`, edit di kiri, lihat hasilnya langsung di kanan.
 
 ## Fitur
 
@@ -53,10 +53,109 @@ Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit
 - Dokumen cetak tidak memuat path lokal: kaki halaman hanya berisi nama berkas, dan bila dokumen gagal dirender, kegagalan itu ditampilkan di
   layar (pesan ramah, rincian di `crash.log`), bukan dicetak sebagai halaman galat.
 
-## Dokumentasi
+## Instalasi
 
-Dokumentasi pengembangan (arsitektur, keputusan desain, kontribusi, keamanan, pengujian) ada di [docs/](docs/README.md).
-Riwayat perubahan: [CHANGELOG.md](CHANGELOG.md).
+Ada dua cara. Keduanya memakai program yang sama dan dibangun dengan runtime .NET yang sudah disertakan, jadi .NET tidak perlu
+dipasang terpisah.
+
+| Cara | Berkas | Cocok untuk |
+| --- | --- | --- |
+| **Installer** | `Makdon-<versi>-setup-x64.exe` | Pemakaian biasa. Terpasang di Start Menu, terdaftar di "Buka dengan", dan bisa di-uninstall dari Pengaturan. |
+| **Portable** | `Makdon-<versi>-portable-x64.zip` | Tanpa instalasi. Semua data (pengaturan, catatan galat) disimpan di folder `data` di samping `Makdon.exe`. |
+
+Installer memasang **per pengguna** secara bawaan (ke `%LOCALAPPDATA%\Programs\Makdon`, tanpa hak administrator). Pilihan
+"semua pengguna" memasang ke `Program Files` dan meminta hak administrator. Ikon desktop tidak dibuat kecuali dicentang.
+
+Di installer, Makdon tidak bisa dipasang bila versi yang lebih baru sudah terpasang (downgrade ditolak). Versi lama harus di-uninstall dulu.
+
+### Verifikasi unduhan
+
+Setiap rilis menyertakan `SHA256SUMS.txt`. Bandingkan hash berkas yang diunduh dengan isinya:
+
+```powershell
+(Get-FileHash .\Makdon-0.1.0-setup-x64.exe -Algorithm SHA256).Hash
+```
+
+Hasilnya harus sama dengan baris yang sesuai di `SHA256SUMS.txt` (abaikan perbedaan huruf besar/kecil).
+
+### Persyaratan Windows
+
+- **Windows 11 23H2 ke atas, x64**: didukung.
+- **Windows 10 x64**: menurut dokumentasi .NET, dukungan resmi hanya untuk edisi LTSC/Enterprise (1607, 1809, 21H2). Windows 10
+  konsumen (22H2) berjalan tetapi tanpa dukungan resmi. Belum diverifikasi di perangkat uji.
+- Windows 7/8.1, Windows 32-bit, dan Windows 10 di bawah 1607 (build 14393) tidak didukung. Installer menolak pemasangan di sana;
+  zip portable tidak bisa menolak sendiri, jadi runtime akan gagal sebelum Makdon berjalan.
+
+### Peringatan SmartScreen dan Smart App Control
+
+Rilis belum ditandatangani secara digital, jadi Windows dapat memperingatkan saat pertama kali dijalankan:
+
+- **Installer:** pada layar "Windows melindungi PC Anda", pilih **Info selengkapnya > Tetap jalankan**. Berkas yang dipasang
+  installer tidak membawa tanda "berasal dari internet", sehingga `Makdon.exe` tidak diperingatkan lagi.
+- **Zip portable:** Explorer menandai setiap berkas hasil ekstraksi dari zip yang diunduh. Urutan yang disarankan: verifikasi
+  checksum, lalu klik kanan zip > **Properti** > centang **Buka blokir** > OK, baru ekstrak. Alternatif di PowerShell:
+  `Unblock-File .\Makdon-0.1.0-portable-x64.zip` sebelum ekstrak.
+- **Smart App Control** (Windows 11, aktif hanya pada instalasi Windows yang bersih): aplikasi tanpa tanda tangan dapat diblokir
+  tanpa tombol "Tetap jalankan". Makdon belum bisa dijalankan di PC seperti itu sampai ada rilis yang ditandatangani. Tidak ada
+  cara resmi untuk melewatinya di sini.
+
+## "Buka dengan" (asosiasi file)
+
+- **Installer:** pendaftaran ditulis otomatis. Untuk pemasangan per pengguna di HKCU; untuk semua pengguna di HKLM.
+  Hapus pendaftaran dengan uninstall.
+- **Portable:** pilih **Berkas > Integrasi Explorer > Daftarkan ke "Buka dengan"**. Menu yang sama menyediakan **Cabut
+  pendaftaran**. Makdon portable tidak mendaftar bila versi terpasang terdeteksi (gunakan versi terpasang atau uninstall dulu).
+  Bila folder portable dipindah, Makdon di lokasi baru menawarkan memperbarui pendaftaran yang masih menunjuk lokasi lama.
+
+Makdon tidak memaksa dirinya menjadi aplikasi bawaan. Setelah terdaftar, klik kanan berkas `.md` > **Buka dengan** >
+**Pilih aplikasi lain** > pilih Makdon (centang "Selalu gunakan"), atau atur di **Pengaturan > Aplikasi > Aplikasi bawaan**.
+
+### Migrasi dari skrip asosiasi lama
+
+Bila sebelumnya mendaftar dengan `scripts\register-file-association.ps1`, jalankan dulu:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\unregister-file-association.ps1
+```
+
+lalu pasang dengan installer. Pendaftaran lama menunjuk ke folder hasil publish dan bisa membuat "Buka dengan" menunjuk ke
+exe yang sudah tidak ada.
+
+## Pembaruan
+
+Makdon tidak memeriksa pembaruan sendiri. Unduh versi baru dari [halaman rilis](https://github.com/hoaaah/Makdon/releases):
+
+- **Installer:** jalankan installer baru. Pemasangan menimpa program di tempat dan pengaturan tetap.
+- **Portable:** ekstrak zip baru menimpa folder lama. Pertahankan folder `data` dan berkas `Makdon.portable`.
+
+Makdon harus ditutup sebelum memasang atau uninstall. Installer dan uninstaller meminta Anda menutupnya bila masih berjalan.
+
+## Uninstall
+
+- **Installer (Pengaturan > Aplikasi, atau Panel Kontrol):** dalam mode interaktif, uninstaller bertanya apakah pengaturan dan catatan
+  galat juga dihapus (bawaan: **Tidak**). Ya menghapus `%APPDATA%\Makdon` dan `%LOCALAPPDATA%\Makdon` di profil yang dipakai
+  untuk uninstall. Pada instalasi semua pengguna, data setiap pengguna tidak dihapus oleh uninstaller dan tetap ada di
+  profil masing-masing. Uninstall dengan `/SILENT` atau `/VERYSILENT` tidak bertanya dan tidak menghapus data.
+- **Portable:** cabut pendaftaran dulu (**Berkas > Integrasi Explorer > Cabut pendaftaran**), lalu hapus folder. Folder `data`
+  ikut terhapus bersama folder itu.
+
+## Lokasi data
+
+| Data | Installer (terpasang) | Portable |
+| --- | --- | --- |
+| Pengaturan (tema, zoom, berkas terakhir, sesi, blokir gambar remote) | `%APPDATA%\Makdon\settings.json` | `<folder Makdon>\data\settings.json` |
+| Catatan galat | `%LOCALAPPDATA%\Makdon\crash.log` (bila lebih dari 512 KB, seluruh file dihapus lalu entri baru ditulis); kegagalan Pratinjau Cetak juga dicatat di sini | `<folder Makdon>\data\crash.log` |
+
+Pada mode portable, data tidak pernah pindah ke `%APPDATA%`. Bila folder portable tidak bisa ditulisi (mis. di dalam
+`Program Files`), pengaturan hanya berlaku selama Makdon berjalan dan Makdon memberi tahu Anda sekali.
+
+Settings yang rusak atau hilang diabaikan (kembali ke bawaan). Saat keluar, daftar berkas terakhir digabung dengan isi
+file di disk supaya beberapa instance tidak saling menimpa.
+
+Aturan sesi: instance yang dibuka dengan argumen file (mis. klik dua kali `.md`) hanya berisi file itu, jadi pada
+awalnya tidak menimpa sesi tersimpan. Begitu Anda membuka tab lagi di instance itu (file dikirim dari peluncuran
+berikutnya, dialog Buka, seret-lepas, atau Berkas Terakhir), instance dianggap "diadopsi" menjadi ruang kerja biasa dan
+saat keluar menyimpan sesinya seperti instance tanpa argumen.
 
 ## Pintasan keyboard
 
@@ -78,9 +177,14 @@ Riwayat perubahan: [CHANGELOG.md](CHANGELOG.md).
 | Ctrl+Shift+P | Pratinjau Cetak (Ctrl+P di jendela pratinjau = Cetak...) |
 | Esc | Tutup panel cari |
 
+## Dokumentasi
+
+Dokumentasi pengembangan (arsitektur, keputusan desain, kontribusi, keamanan, pengujian, distribusi) ada di [docs/](docs/README.md).
+Riwayat perubahan: [CHANGELOG.md](CHANGELOG.md).
+
 ## Build, test, publish
 
-Butuh .NET 9 SDK.
+Butuh **.NET 10 SDK** (target `net10.0-windows`).
 
 ```powershell
 dotnet build Makdon.sln
@@ -88,17 +192,20 @@ dotnet test src/Makdon.Tests
 dotnet run --project src/Makdon -- contoh.md
 ```
 
-Publish satu file (butuh .NET 9 Desktop Runtime di mesin tujuan):
+Publish rilis (self-contained, folder; runtime .NET ikut dikemas, tidak perlu dipasang di mesin tujuan):
 
 ```powershell
-dotnet publish src/Makdon -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet publish src/Makdon -p:PublishProfile=win-x64
 ```
 
-Hasil: `src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe`.
+Hasil: `src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe`. Untuk membangun installer dan zip portable sekaligus
+(butuh Inno Setup 6), jalankan `scripts\build-release.ps1`; keluarannya di `artifacts\<versi>\`. Lihat
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#9-membuat-rilis).
 
-## Asosiasi file (.md)
+## Asosiasi file untuk pengembangan (.md)
 
-Hanya menulis ke HKCU, tanpa hak administrator:
+Skrip ini hanya menulis ke HKCU, tanpa hak administrator, dan ditujukan untuk pengembangan. Pemakai biasa cukup memakai installer atau
+menu Integrasi Explorer pada versi portable.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\register-file-association.ps1 -WhatIf   # lihat dulu
@@ -110,22 +217,13 @@ Windows 10/11 melindungi pilihan aplikasi bawaan, jadi setelah mendaftar pilih M
 Buka dengan > Pilih aplikasi lain (centang "Selalu gunakan"), atau di Pengaturan > Aplikasi > Aplikasi bawaan.
 `-SetDefault` menulis nilai bawaan ekstensi di HKCU dan mencadangkan nilai lama ke
 `HKCU\Software\Makdon\PreviousDefault`; skrip unregister memulihkannya. `-Extensions` hanya menerima huruf kecil
-dan angka (mis. `.md`).
+dan angka (mis. `.md`). Skrip mengikuti tabel registri yang sama dengan installer (lihat
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md#41-spesifikasi-registri-satu-sumber-kebenaran)).
 
-## Lokasi data
+## Lisensi
 
-| Data | Lokasi |
-| --- | --- |
-| Pengaturan (tema, zoom, berkas terakhir, sesi, blokir gambar remote) | `%APPDATA%\Makdon\settings.json` |
-| Catatan galat | `%LOCALAPPDATA%\Makdon\crash.log` (bila lebih dari 512 KB, seluruh file dihapus lalu entri baru ditulis); kegagalan Pratinjau Cetak juga dicatat di sini |
-
-Settings yang rusak atau hilang diabaikan (kembali ke bawaan). Saat keluar, daftar berkas terakhir digabung dengan isi
-file di disk supaya beberapa instance tidak saling menimpa.
-
-Aturan sesi: instance yang dibuka dengan argumen file (mis. klik dua kali `.md`) hanya berisi file itu, jadi pada
-awalnya tidak menimpa sesi tersimpan. Begitu Anda membuka tab lagi di instance itu (file dikirim dari peluncuran
-berikutnya, dialog Buka, seret-lepas, atau Berkas Terakhir), instance dianggap "diadopsi" menjadi ruang kerja biasa dan
-saat keluar menyimpan sesinya seperti instance tanpa argumen.
+Makdon dirilis di bawah lisensi **MIT** (berkas [LICENSE](LICENSE)). Pemberitahuan pihak ketiga (AvalonEdit, Markdig, Markdig.Wpf,
+runtime .NET, WPF) ada di [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), [THIRD-PARTY-NOTICES-WPF.txt](THIRD-PARTY-NOTICES-WPF.txt), dan ikut dalam setiap rilis.
 
 ## Batasan yang diketahui
 
@@ -148,6 +246,8 @@ saat keluar menyimpan sesinya seperti instance tanpa argumen.
 - Pencarian regex yang terlalu lambat (batas 2 detik per kecocokan, 4 detik total) tidak diulang otomatis dengan pola
   yang sama; ubah pola atau opsi untuk mencoba lagi.
 - Belum ada pemeriksa ejaan, penyimpanan otomatis, atau pemulihan draf untuk dokumen tanpa judul yang belum disimpan.
+- Aplikasi tidak memeriksa pembaruan dan tidak menghubungi internet (kecuali membuka halaman rilis atau tautan atas permintaan Anda).
+- Rilis belum ditandatangani digital; lihat peringatan SmartScreen di atas.
 - **Markdown yang sangat besar lambat dibuka di pratinjau utama** (mode Terpisah dan Pratinjau). Hasil pengukuran: WPF menata satu
   `FlowDocument` raksasa secara superlinear, sehingga membuka file sekitar 200 KB memakan ±8 detik dan ±370 MB memori, 500 KB ±16 detik
   dan ±490 MB, dan 1,5 MB lebih dari 5 menit dengan memori sampai ±1 GB, dengan UI sempat tidak merespons. Versi sebelum dan sesudah
