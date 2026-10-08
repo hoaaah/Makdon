@@ -31,9 +31,9 @@ public sealed class WpfHost
         {
             try
             {
-                var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-                app.InitializeComponent();
-                // OnStartup App tidak berjalan di sini (tanpa Run), jadi penangan galat aplikasi tidak terpasang. Pasang pencatat sendiri:
+                var app = new TestApp { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                app.LoadAppXaml();
+                // OnStartup App sengaja dikosongkan (TestApp), jadi penangan galat aplikasi tidak terpasang. Pasang pencatat sendiri:
                 // seperti App sungguhan, galat dispatcher tidak mematikan proses, tetapi dicatat dan diperiksa di akhir tiap test.
                 app.DispatcherUnhandledException += (_, e) =>
                 {
@@ -102,6 +102,39 @@ public sealed class WpfHost
     }
 
     static readonly TimeSpan GraceAfterError = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// App dengan resource tema yang sama, tetapi tanpa startup aplikasi. Konstruktor Application menitipkan pemanggilan
+    /// OnStartup ke dispatcher, jadi OnStartup tetap berjalan begitu <c>Dispatcher.Run</c> dimulai walau tanpa <c>Application.Run</c>.
+    /// OnStartup App membuat mutex/pipe single-instance bernama produksi, mutex installer, MainWindow, dan membaca settings
+    /// pengguna; bila ada Makdon atau proses test lain yang memegang mutex itu, OnStartup meneruskan berkas lalu memanggil
+    /// Shutdown(), dan setiap test WPF sesudahnya gagal dengan "The Application object is being shut down".
+    /// </summary>
+    sealed class TestApp : App
+    {
+        protected override void OnStartup(StartupEventArgs e) { }
+
+        /// <summary>
+        /// Pengganti <c>InitializeComponent</c>: Application.LoadComponent menolak subkelas dari assembly lain, jadi BAML App.xaml
+        /// dibaca langsung ke instance ini (isi resource persis sama dengan App sungguhan, tanpa salinan daftar kamus tema).
+        /// </summary>
+        public void LoadAppXaml()
+        {
+            var info = GetResourceStream(new Uri("/Makdon;component/app.xaml", UriKind.Relative))
+                ?? throw new InvalidOperationException("Resource app.xaml Makdon tidak ditemukan.");
+            using var stream = info.Stream;
+            var reader = new System.Windows.Baml2006.Baml2006Reader(stream,
+                new System.Xaml.XamlReaderSettings
+                {
+                    LocalAssembly = typeof(App).Assembly,
+                    // Source kamus tema relatif terhadap App.xaml di assembly Makdon (bukan assembly entri proses test).
+                    BaseUri = new Uri("pack://application:,,,/Makdon;component/app.xaml"),
+                });
+            var writer = new System.Xaml.XamlObjectWriter(reader.SchemaContext,
+                new System.Xaml.XamlObjectWriterSettings { RootObjectInstance = this });
+            System.Xaml.XamlServices.Transform(reader, writer);
+        }
+    }
 }
 
 /// <summary>

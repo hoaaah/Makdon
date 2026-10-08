@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -13,14 +13,13 @@
   </PropertyGroup>
 
   <!--
-    Publish satu file (butuh .NET 9 Desktop Runtime terpasang):
-      dotnet publish -c Release -r win-x64 (self-contained false) -p:PublishSingleFile=true
+    Publish self-contained lewat profil win-x64 (Properties/PublishProfiles); lihat docs/DISTRIBUTION.md.
     RuntimeIdentifier sengaja tidak dipaksa di sini agar build/test biasa tetap netral.
   -->
   <PropertyGroup>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType>embedded</DebugType>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +28,17 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <!--
+    .NET 10 menambah pembatasan batas paket XPS: font halaman XPS hanya boleh dimuat dari paket yang sama. Untuk paket XPS
+    di memori (Pratinjau Cetak, PreviewBuild) pemeriksaan itu juga menolak font milik paket sendiri, sehingga setiap halaman
+    bertekst gagal dimuat dan pratinjau selalu gagal. Makdon hanya membaca XPS buatannya sendiri, jadi pembatasan dimatikan.
+    Harus lewat runtimeconfig (bukan AppContext.SetSwitch di kode): WPF meng-cache switch ini saat gambar pertama dimuat.
+    Test memasang switch yang sama (Makdon.Tests.csproj) dan memeriksa bahwa runtimeconfig Makdon memuatnya.
+  -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Switch.System.Windows.DisableXpsPackageBoundaryRestriction" Value="true" />
   </ItemGroup>
 
   <ItemGroup>

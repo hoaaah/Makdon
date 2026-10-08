@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
@@ -19,6 +19,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Makdon\Makdon.csproj" />
+  </ItemGroup>
+
+  <!-- Sama dengan Makdon.csproj (proses test memakai runtimeconfig sendiri); lihat XpsBoundarySwitchTests. -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Switch.System.Windows.DisableXpsPackageBoundaryRestriction" Value="true" />
   </ItemGroup>
 
   <ItemGroup>
