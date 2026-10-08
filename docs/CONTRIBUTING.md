@@ -39,15 +39,18 @@ src/MdViewer/               aplikasi WPF
     FindReplaceBar.xaml(.cs), SearchEngine.cs, MarkdownEditing.cs
     TextFileIO.cs, FileStamp.cs, AppSettings.cs, SingleInstance.cs, CrashLog.cs
     MarkdownSupport.cs, AnchorHeadingRenderer.cs, HtmlExporter.cs
+    PrintLayout.cs          PageLayout, PrintSnapshot, PrintSource, PrintService, enum kertas/orientasi/margin
+    HeaderFooterPaginator.cs, PreviewBuild.cs, PrintPreviewWindow.xaml(.cs)   Pratinjau Cetak
     Theming.cs, EditorTheme.cs, Themes/{Light,Dark,Controls,Preview}.xaml
     AppCommands.cs, ChoiceDialog.xaml(.cs), Converters.cs, ViewModeConverter.cs, NotNullConverter.cs
     ZoomLevel.cs, TextStats.cs, EncodingNames.cs, MarkdownFiles.cs, Assets/app.ico
 src/MdViewer.Tests/         xUnit
-    Support/                WpfHost.cs, TempDir.cs, TestLogRedirect.cs
+    Support/                WpfHost.cs (+ DispatcherErrors, FailOnUnexpectedDispatcherErrorsAttribute), AssemblyInfo.cs,
+                            PrintTestKit.cs, TempDir.cs, TestLogRedirect.cs
     *Tests.cs               peta berkas -> area ada di TESTING.md
 ```
 
-`bin/`, `obj/`, `.vs/`, `*.user` diabaikan git (`.gitignore`).
+`bin/`, `obj/`, `.vs/`, `*.user`, `TestResults/` diabaikan git (`.gitignore`).
 
 ## 3. Konvensi kode dan bahasa
 
@@ -60,7 +63,8 @@ Dari CLAUDE.md, dilengkapi pola yang konsisten terlihat di kode:
 - **Jangan menambah fitur di luar permintaan.** Temuan di luar tugas dilaporkan, tidak diperbaiki sekalian.
 - **Penangkapan galat spesifik**, bukan `catch (Exception)` polos: `catch (Exception ex) when (ex is IOException or
   UnauthorizedAccessException ...)`. Galat I/O yang bisa dipulihkan ditampilkan ke pengguna; galat tak terduga dicatat `CrashLog`.
-  Pengecualian yang disengaja (ekspor HTML dan cetak menangkap semua kecuali OOM) ada komentarnya.
+  Pengecualian yang disengaja (ekspor HTML dan cetak menangkap semua kecuali OOM; `PreviewBuild.Guard` menangkap semua **termasuk** OOM,
+  [ADR-25](DESIGN-DECISIONS.md#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle)) ada komentarnya.
 - **Helper lapisan bawah yang "tidak pernah melempar"** (`AppSettings.Load/Save`, `CrashLog.Write`, `SingleInstance`) menyatakannya di
   ringkasan XML; pertahankan sifat itu saat mengubahnya.
 - Gaya yang terlihat: namespace file-scoped (`namespace MdViewer;`), indentasi 4 spasi, field privat tanpa awalan `_`, kelas
@@ -80,7 +84,9 @@ Kerangka: xUnit 2.9.2 + `Microsoft.NET.Test.Sdk` 17.12.0 + coverlet.collector (`
 
 | Kebutuhan | Pakai | Catatan |
 | --- | --- | --- |
-| Menyentuh WPF (`DocumentTab`, `DocumentView`, `FindReplaceBar`, `ChoiceDialog`, `ThemeManager.Apply`, `TextEditor`) | `WpfHost.Instance.Run(...)` + `[Collection("Wpf")]` pada kelas | `WpfHost` = satu thread STA dengan `Dispatcher` dan satu `App` (`ShutdownMode.OnExplicitShutdown`, resource tema dimuat, `OnStartup` tidak dipanggil). Koleksi `Wpf` mematikan paralelisasi (`MarkdownEditingTests.cs:942`). `DocumentTab` menangkap `Dispatcher.CurrentDispatcher`, jadi **buat di dalam `Run`**. |
+| Menyentuh WPF (`DocumentTab`, `DocumentView`, `FindReplaceBar`, `ChoiceDialog`, `ThemeManager.Apply`, `TextEditor`; tipe cetak: `PrintPreviewWindow`, `PreviewBuild`, `HeaderFooterPaginator`, `FlowDocument` hasil `PrintService.CreateDocument`, `DocumentViewer`, `FixedDocumentSequence`, `PrintTicket`) | `WpfHost.Instance.Run(...)` + `[Collection("Wpf")]` pada kelas | `WpfHost` = satu thread STA dengan `Dispatcher` dan satu `App` (`ShutdownMode.OnExplicitShutdown`, resource tema dimuat, `OnStartup` tidak dipanggil). Koleksi `Wpf` mematikan paralelisasi (`MarkdownEditingTests.cs:942`). `DocumentTab` menangkap `Dispatcher.CurrentDispatcher`, jadi **buat di dalam `Run`**; `PreviewBuild` juga (`Dispatcher.CurrentDispatcher` di field-nya). Tipe non-WPF murni (`PageLayout.For`/`MarginOf`/`FromPrintableArea`, `PrintPreviewWindow.TicketMatches`/`ApplyTicket` pada `PrintTicket` terpisah) tidak butuh `Run`, tetapi kelas yang memuatnya di repo ini tetap `[Collection("Wpf")]`. |
+| Test cetak: dokumen contoh, halaman kecil, menunggu tahap, membaca teks halaman XPS | `Support/PrintTestKit` (`using static MdViewer.Tests.Support.PrintTestKit;`) | `Small` (360 x 420, margin 24), `Sample`, `Paragraphs(n)` (banyak halaman `Small`), `Pages(n)` (banyak halaman A4), `StartBuild`, `WaitForEnd`/`WaitForPaginated` (memakai `UiPump.Until` dengan batas `Patience` 15 dtk), `GlyphTexts` (teks halaman XPS), `FooterTexts` (teks kaki halaman), `Paginator`. |
+| Menguji bahwa callback dispatcher melempar (galat yang memang diharapkan) | `using (var scope = WpfHost.ExpectUnhandled()) { ... }` lalu periksa `scope.Errors` | Tanpa scope, galat yang lolos ke dispatcher menggagalkan test lewat `[assembly: FailOnUnexpectedDispatcherErrors]` (`Support/AssemblyInfo.cs`). Untuk menegaskan "tidak ada galat lolos": `var before = WpfHost.Unhandled.Count; ...; Assert.Equal(before, WpfHost.Unhandled.Count);`. Lihat [TESTING.md](TESTING.md#thread-sta-dan-wpfhost). |
 | File/folder sementara | `TempDir` (`new TempDir()`, `File`, `WriteText`, `WriteBytes`, `Entries`; `Dispose` menghapus) | Lokasi `%TEMP%\MdViewer.Tests\<guid>`. Pakai `Entries()` untuk menegaskan tidak ada sisa `~md*.tmp`. |
 | Mengalihkan `crash.log` | `TestLogRedirect` (`[ModuleInitializer]`) | Otomatis berlaku untuk seluruh assembly test; tidak perlu dipanggil. Log test: `%TEMP%\MdViewer.Tests\crash-<pid>.log`. |
 | Menunggu event async/timer di dalam satu test STA | `UiPump.For(TimeSpan)` / `UiPump.Until(cond, timeout)` | Didefinisikan di `DocumentViewLifecycleTests.cs:14-41`; memompa dispatcher (`DispatcherFrame`). `UiPump.IsTimerEnabled(owner, "namaField")` membaca **field privat** lewat refleksi (`statsTimer`, `renderTimer`, `queryTimer`, `refreshTimer`): jangan ganti nama field itu tanpa memperbarui test. |
@@ -136,16 +142,30 @@ public class ContohTests : IDisposable
    `FileSystemWatcher` + timer 400 ms), `RefreshPreview()` eksplisit, `UiPump.Until(kondisi, timeout)` dengan batas atas,
    `BlockingCollection.TryTake(timeout)` / `Task.WaitAsync`. Jujur soal kondisi sekarang: masih ada jeda tetap pada
    `UiPump.For(...)` (7 pemanggilan di `DocumentViewLifecycleTests.cs`, dipakai untuk membuktikan "tidak ada yang terjadi setelah
-   debounce"), `Thread.Sleep` pada 4 tempat di `SingleInstanceServerTests.cs` dan 1 di `IoAndUtilityCoverageTests.cs:108` (polling
+   debounce"; test cetak menambah 41 pemanggilan: 17 di `PreviewBuildTests`, 19 di `PrintPreviewWindowBehaviorTests`, 3 di
+   `PrintContentAndCommandTests`, 1 di `PrintPreviewTests`, 1 di `WpfHostErrorTrackingTests`, umumnya untuk memberi waktu pada callback sisa setelah
+   `Dispose` atau pada pemuat gambar), `Thread.Sleep` pada 4 tempat di `SingleInstanceServerTests.cs` dan 1 di `IoAndUtilityCoverageTests.cs:108` (polling
    dengan batas 5 dtk). Itu pengecualian; jangan menambah yang baru bila ada pilihan deterministik.
 4. **Uji perilaku, bukan implementasi** (arahan agen `kurang-kerjaan`): cakup jalur normal, edge case, dan error path (file
    terkunci lewat `FileShare.None`, folder tak ada, direktori sebagai target, input kosong/null).
 5. **Tipe yang test butuhkan harus bisa dijangkau:** `internal` terlihat karena `InternalsVisibleTo("MdViewer.Tests")`
    (`AssemblyInfo.cs:4`). `x:Name` XAML (mis. `FindBox`, `CountText`, `ReplaceRow`, `ButtonPanel`, `MessageText`) dipakai test; mengubah
-   nama/hapus mempengaruhi test.
+   nama/hapus mempengaruhi test. Jendela Pratinjau Cetak sama: test mencari `Viewer`, `PageBox`, `PrintButton`, `BusyPanel`, `BusyText`,
+   `BusyDetail`, `FooterCheck`, `*Button` (orientasi/kertas/margin/navigasi/zoom) lewat `FindName`. Beberapa test cetak juga membaca
+   anggota **privat** `PreviewBuild` lewat refleksi (`counter`, `packageUri`, `cleanupScheduled`, metode `Cleanup`;
+   `PreviewBuildTests.cs:15-16, 430, 544-545, 590, 601`) dan membaca teks `MainWindow.xaml` dengan regex (`PrintContentAndCommandTests.cs:333, 369`).
 6. **Test symlink/ACL:** test symlink keluar diam-diam (return) bila mesin tidak boleh membuat symlink; test fallback `WriteInPlace`
    memakai ACL deny `CreateFiles` pada folder temp dan memulihkannya di `finally` (tidak butuh admin).
 7. **Test yang belum pernah dijalankan dianggap belum selesai** (arahan `kurang-kerjaan`). Jalankan `dotnet test` sebelum PR.
+8. **Test cetak tanpa printer fisik dan tanpa dialog sungguhan.** Jangan membuka `PrintDialog`, `MessageBox`, atau `ChoiceDialog` dari test (dialog
+   modal menggantung proses test) dan jangan mencetak ke printer atau ke "Microsoft Print to PDF". Jalur Cetak di `PrintPreviewWindow` diuji lewat
+   hook `ShowPrintDialogForTests` (mengembalikan `false` = batal; `PrintPreviewWindowBehaviorTests.cs:889, 921`); logika kertas/orientasi diuji lewat
+   pembantu statis `TicketMatches`/`ApplyTicket`/`DescribeTicket` pada `PrintTicket` buatan sendiri. Kegagalan render dipaksa lewat
+   `DocumentView.RenderFaultForTests` (**kembalikan ke `null` di `finally`**). Test yang memang mengharapkan callback dispatcher melempar membungkusnya
+   dengan `WpfHost.ExpectUnhandled()`. Tunggu kondisi dengan `UiPump.Until(cond, PrintTestKit.Patience)`, bukan jeda tetap. Pola yang dipakai test yang
+   ada: jendela ditutup di `Dispose` kelas test dan `PreviewBuild` di-`Dispose`, supaya paket XPS dan timer tidak tertinggal ke test berikutnya.
+9. **Dokumen cetak tidak boleh memuat path lokal.** Jalur cetak tidak boleh memakai `CreateErrorDocument` (memuat `CrashLog.LogPath`); kegagalan render harus
+   dilempar (`throwOnFailure: true`) dan ditampilkan di layar. Kaki halaman hanya memuat nama berkas. Lihat [SECURITY.md](SECURITY.md#212-pratinjau-cetak-dan-cetak).
 
 ## 5. Cara menambah
 
@@ -186,7 +206,9 @@ mengasumsikan dua kamus. Perlu perancangan ulang dan test baru (`ThemeManagerPur
 3. Tulis handler di `MainWindow.xaml.cs`. Bila menyentuh dokumen, lewat `Current` (`DocumentTab`) / `Current.View`.
 4. Tambahkan `MenuItem Command="..."` (dan tombol toolbar bila perlu). Pintasan yang didefinisikan lewat `Window.InputBindings`
    (bukan `AppCommands`) tidak muncul otomatis di menu; isi `InputGestureText` manual (contoh: Ctrl+W, Ctrl+Shift+S).
-5. Periksa bentrok dengan pintasan bawaan WPF/AvalonEdit dan tabel pintasan di [../README.md](../README.md); perbarui README.
+5. Periksa bentrok dengan pintasan bawaan WPF/AvalonEdit dan tabel pintasan di [../README.md](../README.md); perbarui README. Pintasan
+   ganda di `AppCommands`, `CommandBinding` standar, dan `KeyBinding` di `MainWindow.xaml` ditangkap otomatis oleh
+   `NoTwoAppCommands_ShareTheSameKeyGesture` dan `MainWindowShortcuts_AreUnique_*` (`PrintContentAndCommandTests.cs:319, 333`).
 6. Bila memperlihatkan dialog, jangan dari event; pakai `ChoiceDialog` dan, untuk konflik, `conflictQueue` (lihat larangan di bawah).
 
 ### Menambah mode tampilan
@@ -198,7 +220,7 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
 - `MainWindow.xaml`: `RoutedUICommand` + `CommandBinding` + `KeyBinding` (Ctrl+1/2/3 saat ini) + item menu + `RadioButton`
   segmented control (`ViewModeConverter` dengan `ConverterParameter` = nama enum).
 - `MainWindow.ViewMode_Executed` memetakan **teks** `RoutedUICommand` ("Editor", "Pratinjau", selain itu Terpisah)
-  (`MainWindow.xaml.cs:605-614`): tambahkan cabangnya, atau ubah ke pemetaan yang eksplisit.
+  (`MainWindow.xaml.cs:633-642`): tambahkan cabangnya, atau ubah ke pemetaan yang eksplisit.
 - `ViewModeLabelConverter`, `EditorVisibleConverter` (`Converters.cs`), `CanEdit_CanExecute`/`CanFormat_CanExecute`.
 - Sesi: `SessionTab.Mode` disimpan sebagai teks nama enum dan `ParsedMode` jatuh ke `Split` untuk nilai tak dikenal
   (`AppSettings.cs:15`). **Mengganti nama anggota enum yang ada membuat sesi lama kembali ke Terpisah.**
@@ -233,6 +255,7 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
 - [ ] Perubahan tema: kunci Light = Dark (periksa dengan perintah di atas); `DynamicResource` bukan `StaticResource`.
 - [ ] Alur yang menulis file memakai `TextFileIO.Write`; yang membuka dokumen memakai `MainWindow.OpenFile`.
 - [ ] Ekspor/pratinjau: tidak menyatukan pipeline; URL baru lewat `ClassifyUrl`; lihat [SECURITY.md](SECURITY.md).
+- [ ] Cetak/Pratinjau Cetak: tidak ada path lokal atau dokumen galat di kertas; test cetak tanpa printer fisik/dialog sungguhan (aturan 8-9 di 4.2).
 - [ ] Teks UI/pesan/komentar bahasa Indonesia, identifier bahasa Inggris; komentar menjelaskan *mengapa*.
 - [ ] Tidak ada fitur di luar permintaan; temuan lain dilaporkan terpisah.
 - [ ] Dokumentasi diperbarui bila perilaku berubah: [../README.md](../README.md) (fitur, pintasan, batasan), [../CLAUDE.md](../CLAUDE.md)
@@ -248,6 +271,10 @@ Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik y
   WPF; UNC, `ftp:`, skema lain, dan `data:` diganti penanda; `http(s)` mengikuti opsi blokir remote.
 - Jangan menyematkan gambar lokal di ekspor dari luar folder dokumen; hormati 2 MB per gambar dan anggaran 30 MB; jangan menghapus
   penanganan OOM/galat di `ExportHtml_Executed`.
+- Jangan membuat dokumen cetak yang memuat path lokal atau dokumen galat (`CreateErrorDocument`); jalur cetak/pratinjau cetak melempar
+  (`throwOnFailure: true`). Jangan mencetak dari tempat lain selain `PrintService`/`PrintPreviewWindow`: ukuran halaman hanya diturunkan oleh
+  `PageLayout.Apply`, kaki halaman oleh `HeaderFooterPaginator`.
+- Jangan menutup paket XPS pratinjau (`PreviewBuild.Cleanup`) secara sinkron dari `Dispose`: tunggu penulis berhenti dan dispatcher idle.
 - Jangan membuka dokumen selain lewat `MainWindow.OpenFile` (cek ukuran, OOM, tab ganda).
 - Jangan menampilkan `MessageBox`/dialog konflik langsung dari event; pakai `ChoiceDialog` dan serialisasi `conflictPromptOpen`/
   `conflictQueue`. `DocumentTab.SaveTo` menunda pemeriksaan eksternal selama berjalan; pertahankan.

@@ -5,8 +5,9 @@ perubahan di masa depan tidak melanggar alasan aslinya tanpa sadar.
 **Pembaca:** pengembang dan reviewer.
 
 **Aturan dokumen ini:** alasan hanya diambil dari komentar kode, nama test, README, dan CLAUDE.md. Bila motivasi tidak tertulis di
-mana pun, ditulis "tidak tercatat" atau "dugaan, belum diverifikasi". Riwayat git hanya satu commit (`448e1ad`), jadi tidak ada
-sejarah keputusan yang bisa ditelusuri dari sana. Arsitektur: [ARCHITECTURE.md](ARCHITECTURE.md). Keamanan: [SECURITY.md](SECURITY.md).
+mana pun, ditulis "tidak tercatat" atau "dugaan, belum diverifikasi". Riwayat git hanya dua commit (`448e1ad`, `b2a35be`), jadi tidak ada
+sejarah keputusan yang bisa ditelusuri dari sana (commit kedua, `b2a35be`, menambah dokumentasi dan menutup celah tautan UNC; ADR-19
+sampai ADR-26 menjelaskan fitur Pratinjau Cetak yang belum di-commit saat ditulis). Arsitektur: [ARCHITECTURE.md](ARCHITECTURE.md). Keamanan: [SECURITY.md](SECURITY.md).
 
 Format tiap catatan: **Konteks** - **Keputusan** - **Konsekuensi** - **Bukti** (kode `path:baris`, test).
 Status semua catatan: berlaku (tercermin di kode saat ini).
@@ -31,6 +32,14 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 | [16](#adr-16-pembukaan-dokumen-hanya-lewat-openfile-dengan-batas-ukuran) | Pembukaan dokumen hanya lewat `OpenFile`, batas ukuran |
 | [17](#adr-17-klik-tautan-di-pratinjau) | Klik tautan di pratinjau |
 | [18](#adr-18-skrip-asosiasi-file-hanya-hkcu) | Skrip asosiasi file hanya HKCU |
+| [19](#adr-19-pratinjau-cetak-lewat-paket-xps-di-memori) | Pratinjau Cetak lewat paket XPS di memori |
+| [20](#adr-20-snapshot-saat-pratinjau-dibuka-dan-parse-yang-dipakai-bersama) | Snapshot saat pratinjau dibuka dan parse yang dipakai bersama |
+| [21](#adr-21-kaki-halaman-di-dalam-margin-bawah) | Kaki halaman di dalam margin bawah |
+| [22](#adr-22-pratinjau-punya-pengaturan-kertas-sendiri-dan-konfirmasi-bila-dialog-cetak-berbeda) | Pratinjau punya pengaturan kertas sendiri + konfirmasi bila dialog Cetak berbeda |
+| [23](#adr-23-dokumen-cetak-selalu-bertema-terang) | Dokumen cetak selalu bertema Terang |
+| [24](#adr-24-dokumen-galat-tidak-pernah-dicetak) | Dokumen galat tidak pernah dicetak |
+| [25](#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle) | Galat pratinjau dibungkus `Guard`, paket XPS dibersihkan setelah idle |
+| [26](#adr-26-seam-khusus-test-pada-kode-cetak) | Seam khusus test pada kode cetak |
 
 ---
 
@@ -165,13 +174,13 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   `DataImage` -> teks `[gambar data: tidak ditampilkan di pratinjau]`; `Blocked`/`Mailto` (UNC, `file://host`, `//host`, `ftp:`,
   dst.) -> `[gambar remote diblokir]` selalu; `Http` -> diblokir bila `BlockRemoteImages` (bawaan `true`, disimpan di
   `AppSettings`, menu Tampilan > "Muat gambar remote"). Setelah klasifikasi hanya `file:` tanpa host yang diteruskan ke WPF; path
-  UNC hasil gabungan hanya boleh bila dokumen sendiri ada di share yang sama (`IsAllowedLocalPath`). Cetak memakai `ParseDocument` yang
-  sama. Jaring pengaman: `ReplaceUnloadableImages` mengganti gambar lokal yang ada tetapi tak bisa di-decode dengan teks, supaya satu
+  UNC hasil gabungan hanya boleh bila dokumen sendiri ada di share yang sama (`IsAllowedLocalPath`). Cetak dan Pratinjau Cetak memakai
+  `ParseDocument` yang sama (lewat `DocumentView.ParsePrintSnapshot`, [ADR-20](#adr-20-snapshot-saat-pratinjau-dibuka-dan-parse-yang-dipakai-bersama)). Jaring pengaman: `ReplaceUnloadableImages` mengganti gambar lokal yang ada tetapi tak bisa di-decode dengan teks, supaya satu
   gambar rusak tidak menggagalkan seluruh pratinjau.
 - **Konsekuensi.** `BlockRemoteImages` adalah flag statis global (`DocumentView.BlockRemoteImages`), bukan per tab; mengubahnya
   memanggil `RefreshPreview` di semua tab. Gambar `data:` sah tampil di ekspor tetapi tidak di pratinjau. Pratinjau tidak
   membatasi gambar lokal ke folder dokumen (hanya ekspor yang membatasi).
-- **Bukti.** `MarkdownSupport.cs:122-200`, `DocumentView.xaml.cs:56, 418-511`, `MainWindow.xaml.cs:123-129`. Test:
+- **Bukti.** `MarkdownSupport.cs:122-200`, `DocumentView.xaml.cs:56, 424-527`, `MainWindow.xaml.cs:123-129`. Test:
   `ResolveImageUrlsSecurityTests` (`ExportAndImageSecurityTests.cs:330-491`), `RemoteImageBlockingTests` (`HardeningTests.cs:188-280`),
   `RemoteImageOverFtp_IsNotFetched_WhenRemoteImagesAreBlocked` (membuka `TcpListener` lokal dan memastikan WPF tidak terhubung,
   `DocumentViewLifecycleTests.cs:510`), `UndecodableImage_*` (`:414-459`), `DataImage_ShowsMarker_*` (`:468`).
@@ -288,8 +297,11 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
   `FlowDocument` tetap dibuat di UI thread (wajib). Scroll dipertahankan setelah render; mode Terpisah mengikuti posisi editor secara
   proporsional dengan penanda "expected offset" untuk memutus umpan balik. Hanya dilakukan bila pratinjau tampak.
 - **Konsekuensi.** README menyederhanakan ambang sebagai "di atas 1 MB"; kode memakai ambang karakter berjenjang (100 rb, 200 rb,
-  1 juta). Pembuatan `FlowDocument` dokumen sangat besar tetap membekukan UI sesaat.
-- **Bukti.** `DocumentView.xaml.cs:22-29, 91-102, 326-446`. Test: `StaleBackgroundRender_NeverReplacesTheNewerRender`
+  1 juta). Pembuatan `FlowDocument` dokumen sangat besar tetap membekukan UI; pengukuran kemudian menunjukkan "sesaat" bisa
+  berarti sekitar 8 detik (200 KB), 16 detik (500 KB), sampai lebih dari 5 menit (1,5 MB), karena WPF menata satu `FlowDocument` raksasa secara superlinear
+  (angka: README, Batasan yang diketahui). Parse latar tidak mengurangi bagian ini; bahwa penataan berjalan di UI thread adalah
+  inferensi dari UI yang tak merespons, belum diverifikasi lebih jauh.
+- **Bukti.** `DocumentView.xaml.cs:22-29, 97-108, 332-452`. Test: `StaleBackgroundRender_NeverReplacesTheNewerRender`
   (`DocumentViewLifecycleTests.cs:333`), `BackgroundRender_AfterDispose_*` (`:359`), `BackgroundRender_LargeDocument*` (`:395`).
   Sinkron scroll dan lompat `#anchor` tidak diuji.
 
@@ -319,7 +331,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 
 ## ADR-17 Klik tautan di pratinjau
 
-- **Konteks.** Komentar `DocumentView.xaml.cs:670-671`: hanya skema aman yang diserahkan ke shell; tautan ke file lokal non-markdown
+- **Konteks.** Komentar `DocumentView.xaml.cs:699-700`: hanya skema aman yang diserahkan ke shell; tautan ke file lokal non-markdown
   diabaikan "agar dokumen tidak bisa menjalankan file lain di sebelahnya". Versi awal menggabungkan `Path.Combine(baseDir,
   Uri.UnescapeDataString(url))` lalu memanggil `File.Exists` sebelum cek ekstensi; tautan ter-percent-encode ke UNC
   (`%5C%5Chost%5Cs%5Cx.md`, `%2F%2Fhost%2Fs%2Fx.md`) memicu koneksi SMB/NTLM dengan satu klik (risiko R1, sekarang ditutup).
@@ -332,7 +344,7 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konsekuensi.** Allowlist ini terpisah dari `ClassifyUrl` (yang dipakai ekspor/gambar) tetapi memakai `IsAllowedLocalPath` yang sama
   dengan gambar pratinjau. Urutan cek (ekstensi dan lokasi sebelum `File.Exists`) adalah bagian dari kontrak keamanan; jangan dibalik.
   Lihat [SECURITY.md](SECURITY.md#4-risiko-yang-sudah-ditutup) (R1, ditutup) dan [bagian 2.4](SECURITY.md#24-unc-smb-ntlm).
-- **Bukti.** `MarkdownSupport.cs:361-412`, `DocumentView.xaml.cs:644-683`. Test: `LinkResolutionTests.cs` (resolusi path). Pembungkus
+- **Bukti.** `MarkdownSupport.cs:361-412`, `DocumentView.xaml.cs:673-712`. Test: `LinkResolutionTests.cs` (resolusi path). Pembungkus
   `OnHyperlink` tidak punya test (hanya `RequestOpen` yang diuji, `DocumentTabTests.cs:274`).
 
 ## ADR-18 Skrip asosiasi file hanya HKCU
@@ -345,3 +357,148 @@ Status semua catatan: berlaku (tercermin di kode saat ini).
 - **Konsekuensi.** Skrip tidak bisa memaksa MdViewer menjadi aplikasi bawaan. Tidak ada test otomatis untuk skrip (CLAUDE.md melarang
   menjalankan skrip registri sungguhan di test).
 - **Bukti.** `scripts/register-file-association.ps1:37, 68-70, 81-140`, `scripts/unregister-file-association.ps1:18, 31-33, 52-102`.
+
+## ADR-19 Pratinjau Cetak lewat paket XPS di memori
+
+- **Konteks.** Pratinjau Cetak harus memperlihatkan halaman yang persis sama dengan yang tercetak, termasuk kaki halaman "Halaman X dari N"
+  yang butuh N (jumlah halaman akhir) sudah diketahui. Komentar `PreviewBuild.cs:11-15`: `DocumentViewer` "hanya menerima dokumen
+  tetap, bukan `FlowDocument`". Tidak ada test yang membuktikan penolakan itu (klaim perilaku WPF dari komentar; **belum diverifikasi** di
+  repo ini). Alternatif lain yang dipertimbangkan tidak tercatat di kode, komentar, maupun test.
+- **Keputusan.** `PreviewBuild` memaginasi `FlowDocument` cetak di latar, lalu menulis halaman lewat `XpsDocumentWriter.WriteAsync` ke paket
+  XPS di `MemoryStream` (didaftarkan di `PackageStore`, URI `pack://mdviewer-preview-N.xps`) dan menyerahkan `FixedDocumentSequence` ke
+  `DocumentViewer` (`PreviewBuild.cs:152-171, 198`). Yang ditulis adalah `HeaderFooterPaginator` di atas paginator FlowDocument, yaitu
+  paginator yang sama dengan jalur Cetak langsung, jadi "yang tampil sama dengan yang tercetak" (komentar `PreviewBuild.cs:13-15`).
+  `DocumentViewer` baru diisi pada tahap `Ready` (`PrintPreviewWindow.xaml.cs:166-173`), yaitu sesudah paginasi dan penulisan XPS selesai
+  (komentar kelas di `:15-16` hanya menyebut "setelah paginasi selesai"). Tombol Cetak mencetak paket yang sama
+  (`build.Pages.DocumentPaginator`), bukan hasil penyusunan ulang.
+- **Konsekuensi.** Siklus hidup paket menjadi rumit dan wajib dikelola ([ADR-25](#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle)).
+  Halaman pratinjau berukuran tetap, jadi kertas/orientasi tidak bisa diubah sesudah penulisan ([ADR-22](#adr-22-pratinjau-punya-pengaturan-kertas-sendiri-dan-konfirmasi-bila-dialog-cetak-berbeda)).
+  Tiap perubahan layout atau kaki halaman menulis ulang seluruh paket. Keterbatasan yang dicatat penulisnya (`PreviewBuild.cs:23-25`): gambar
+  `http(s)` (bila blokir remote dimatikan) dimuat async oleh WPF dan bisa belum terunduh saat halaman dibekukan di XPS, sehingga tampil
+  kosong; gambar lokal tidak terpengaruh. Seluruh halaman tinggal di memori selama jendela terbuka (ukurannya untuk dokumen besar tidak diukur).
+- **Bukti.** `PreviewBuild.cs`, `PrintPreviewWindow.xaml.cs:103-177, 446-447`. Test: `PreviewBuild_ProducesFixedPagesMatchingThePaginator_*`
+  (`PrintPreviewTests.cs:298`), `XpsPages_CarryDocumentNameAndPageXOfN_WhenFooterIsOn`, `XpsPages_HaveTheLayoutPageSize`
+  (`PreviewBuildTests.cs:45, 86`). Pencetakan nyata dari paket (`dialog.PrintDocument`) tidak teruji ([TESTING.md](TESTING.md#yang-tidak-teruji)).
+
+## ADR-20 Snapshot saat pratinjau dibuka dan parse yang dipakai bersama
+
+- **Konteks.** Komentar `PrintLayout.cs:14-17`: snapshot "diambil sekali saat pratinjau dibuka sehingga penyuntingan sesudahnya tidak
+  mengubah pratinjau, dan editor tidak terkunci". Komentar `MainWindow.xaml.cs:603`: jendela modal, jadi editor tidak bisa berubah selama
+  terbuka. Dokumen besar tidak boleh membekukan UI saat pratinjau dibuka (komentar `PrintLayout.cs:82-87`).
+- **Keputusan.** `DocumentView.CapturePrintSnapshot` menyalin teks, folder dokumen, `BlockRemoteImages`, dan judul (`PrintSnapshot`).
+  `PrintPreviewWindow` membuat satu `PrintSource` yang mem-parse sekali (sinkron di bawah `BackgroundParseChars` = 100 rb karakter, selain itu
+  `Task.Run`); ganti kertas/margin/orientasi/kaki halaman hanya membuat `FlowDocument` baru dari AST yang sama. AST dipakai bersama antarsiklus
+  karena renderer hanya membacanya; satu-satunya yang mengubahnya adalah `ReplaceUnloadableImages` pada jalur galat, yang hanya jalan di UI
+  thread dan idempoten (komentar `PrintLayout.cs:86-88`, `DocumentView.xaml.cs:594-595`). Flag blokir remote diambil dari snapshot, bukan dari
+  nilai global saat penyusunan ulang. Parse latar tidak dibatalkan saat jendela ditutup: Markdig tak punya titik pembatalan, token hanya
+  mencegah tugas yang belum mulai (komentar `PrintLayout.cs:89-90`).
+- **Konsekuensi.** Pratinjau bisa berbeda dari isi tab bila tab berubah lewat jalur lain sesudahnya (mis. dimuat ulang oleh perubahan
+  eksternal); judul dan folder gambar tetap yang lama walau tab disimpan ke path lain atau ditutup. Parse latar yang sudah berjalan
+  terus memakai CPU sampai selesai.
+- **Bukti.** `PrintLayout.cs:14-18, 82-125`, `DocumentView.xaml.cs:585-596`, `PrintPreviewWindow.xaml.cs:45-52`. Test:
+  `Snapshot_IsNotAffectedByLaterEditorChanges` (`PrintPreviewTests.cs:218`), `Snapshot_ClosingTheTabAfterOpeningThePreview_*` dan
+  `Snapshot_ChangingTheFilePathAfterOpening_*` (`PrintPreviewWindowBehaviorTests.cs:1048, 1075`), `SnapshotBlockRemoteFlag_IsHonoured_*`
+  (`PrintContentAndCommandTests.cs:264`), `TwoBuildsFromOneSource_ShareTheParse_*` dan `LargeDocument_*` (`PreviewBuildTests.cs:631, 750, 776`),
+  `LargeDocument_OpensWithoutBlocking_AndLayoutChangesReuseTheParse` (`PrintPreviewWindowBehaviorTests.cs:1005`).
+
+## ADR-21 Kaki halaman di dalam margin bawah
+
+- **Konteks.** Cetak dan pratinjau perlu nama dokumen dan nomor halaman, tetapi menambah kaki tidak boleh mengubah paginasi isi (jumlah dan
+  isi halaman harus sama dengan atau tanpa kaki). Komentar `HeaderFooterPaginator.cs:80-84`: margin Sempit menaruh teks sekitar 17 DIP dari tepi
+  kertas, di dalam zona yang tak bisa dicetak banyak printer.
+- **Keputusan.** `HeaderFooterPaginator` membungkus paginator FlowDocument dan menggambar kaki (nama dokumen di kiri, dipotong dengan elipsis
+  pada satu baris; "Halaman X dari N" di kanan; Segoe UI 10, abu-abu) di dalam margin bawah. Posisi: di tengah margin bawah, tetapi tidak lebih
+  dekat dari 0,25 inci (`MinFooterEdgeDistance` = 24 DIP) ke tepi kertas, dan tidak pernah keluar dari margin bawah. Bila jumlah halaman
+  belum diketahui hanya "Halaman X". Hanya kaki yang ada (tidak ada kepala halaman, walau namanya `HeaderFooterPaginator`). Cetak langsung
+  (Ctrl+P) selalu memakai kaki (`headerFooter: true`, `MainWindow.xaml.cs:594`); di pratinjau bisa dimatikan lewat kotak "Nama dan nomor halaman".
+- **Konsekuensi.** Untuk margin yang sangat kecil (kurang dari 24 DIP ditambah tinggi teks) teks tetap di dalam margin dan bisa lebih dekat dari
+  0,25 inci ke tepi (komentar kode: "tetap di dalam margin bawah ... untuk margin yang sangat kecil"). Ketiga preset margin memenuhi batas itu.
+  Kaki ikut Ctrl+P, jadi cetak langsung kini berbeda dari versi sebelum fitur ini (lihat [CHANGELOG](../CHANGELOG.md)).
+  Warna dan font kaki ditulis tetap di kode (`HeaderFooterPaginator.cs:17-27`), tidak mengikuti tema.
+- **Bukti.** `HeaderFooterPaginator.cs:14-92`. Test (`HeaderFooterPaginatorTests.cs`): `Footer_DoesNotEnterTheContentArea_SoBodyTextIsNotMovedByIt` (`:74`),
+  `PageCount_IsTheSameWithAndWithoutFooter_AndAsTheBasePaginator` (`:58`), `Footer_IsDrawnInsideTheBottomMargin` (`:307`),
+  `Footer_StaysAtLeastAQuarterInchFromThePaperEdge_ForEveryRealMarginPreset` (`:325`), `VeryLongName_IsTrimmedToOneLine_*` (`:275`),
+  `OddDocumentNames_*` (`:258`, 15 nama aneh), `Footer_WhenCountIsNotYetKnown_ShowsOnlyThePageNumber` (`:219`).
+
+## ADR-22 Pratinjau punya pengaturan kertas sendiri dan konfirmasi bila dialog Cetak berbeda
+
+- **Konteks.** Komentar `PrintPreviewWindow.xaml.cs:462-465`: halaman pratinjau berukuran tetap (XPS). Bila pengguna mengganti kertas atau
+  orientasi di dialog Cetak, pilihannya tidak boleh ditimpa diam-diam dan juga tidak dipaksakan ke printer tanpa tanya; membangun ulang halaman
+  dari pilihan dialog tidak bisa dilakukan di situ (dialog sudah tertutup, dan kertas seperti Legal/A5 tidak punya preset di pratinjau).
+- **Keputusan.** Pratinjau punya pilihan sendiri: Orientasi (Potret/Lanskap), Kertas (A4/Letter), Margin (0,5"/0,75"/1") dan kaki halaman. Sebelum
+  `PrintDialog` tampil, tiketnya disamakan dengan pratinjau (`ApplyTicket(dialog)`, ukuran eksplisit supaya tidak bergantung tabel kertas
+  driver, komentar `:499`). Sesudah dialog diterima, `ConfirmPaperMatchesPreview` membandingkan tiket dengan pratinjau (`TicketMatches`: nama
+  kertas termasuk varian `Rotated`, atau lebar/tinggi dengan toleransi 4 DIP; nilai yang tidak diisi dianggap cocok). Bila beda, `ChoiceDialog`
+  menawarkan "Cetak sesuai pratinjau" atau "Batal" (bawaan: Batal; Esc/X = Batal). "Cetak sesuai pratinjau" menyetel tiket ke kertas dan
+  orientasi pratinjau. Tanpa printer terpasang, `dialog.PrintTicket` melempar dan konfirmasi dilewati (dialog Cetak sendiri yang melaporkan).
+  Nama kertas yang ditampilkan dipetakan ke nama lazim (`PaperName`), selebihnya nama enum apa adanya.
+- **Konsekuensi.** Pengaturan pratinjau tidak disimpan antarpembukaan (bawaan A4, potret, Normal). Cetak dengan kertas selain A4/Letter hanya
+  bisa dengan ukuran pratinjau. Cetak langsung (Ctrl+P) berlawanan: ukuran halaman diambil dari dialog (`PageLayout.FromPrintableArea`).
+  Bahwa mengubah objek `dialog.PrintTicket` benar-benar dipakai saat `PrintDocument` **belum diverifikasi** (test hanya memeriksa `ApplyTicket`
+  pada `PrintTicket` terpisah).
+- **Bukti.** `PrintPreviewWindow.xaml.cs:421-569`, `PrintLayout.cs:54-65`. Test: `ApplyTicket_*`, `TicketMatches_*`, `DescribeTicket_*`
+  (`PrintContentAndCommandTests.cs:421-528`). `ConfirmPaperMatchesPreview` sendiri (dengan `ChoiceDialog`) dan pencetakan nyata tidak
+  dijalankan test mana pun; hook `ShowPrintDialogForTests` hanya dipakai dengan hasil "batal" (`PrintPreviewWindowBehaviorTests.cs:889, 921`).
+
+## ADR-23 Dokumen cetak selalu bertema Terang
+
+- **Konteks.** Aplikasi bisa bertema Gelap, tetapi kertas putih. Pratinjau utama memakai tema aktif.
+- **Keputusan.** `DocumentView.BuildPrintDocument(parsed)` merender ulang dengan `ThemeManager.LoadDictionary(dark: false)` dan `Background = White`
+  (`DocumentView.xaml.cs:596-602`). Berlaku untuk Cetak langsung dan Pratinjau Cetak. Jendela pratinjau sendiri bertema aplikasi (area abu-abu
+  memakai `SurfaceAltBrush`), hanya kertasnya putih. `PageLayout.Apply` menimpa `PagePadding` bawaan 48 dengan margin preset.
+- **Konsekuensi.** Kunci brush harus ada di `Light.xaml` (lihat [CONTRIBUTING.md](CONTRIBUTING.md#menambah-temakunci-brush-baru)). Lihat juga
+  [ADR-12](#adr-12-tema-lewat-resourcedictionary).
+- **Bukti.** `DocumentView.xaml.cs:596-602`, `PrintLayout.cs:73-79`. Test: `CreateDocument_UsesTheLightTheme_EvenWhenTheAppIsDark`,
+  `CreateDocument_IsWhitePaper_WithLayoutSizeAndMargin_NotTheDefaultPadding` (`PrintContentAndCommandTests.cs:31, 46`).
+
+## ADR-24 Dokumen galat tidak pernah dicetak
+
+- **Konteks.** Bila render gagal, pratinjau utama menampilkan dokumen galat (`CreateErrorDocument`) yang memuat `ex.Message` dan jalur
+  `CrashLog.LogPath` (`DocumentView.xaml.cs:529-535`), yaitu path profil pengguna. Komentar `DocumentView.xaml.cs:455-458`: dokumen galat tidak
+  boleh dicetak dan memuat path profil pengguna.
+- **Keputusan.** Jalur cetak/pratinjau cetak memanggil `CreateFlowDocument(..., throwOnFailure: true)`: kegagalan akhir dilempar sebagai
+  `InvalidOperationException` berpesan ramah (nama tipe galat asal + "Isi file tidak berubah. Rincian ada di crash.log.", tanpa path;
+  galat asal tersimpan sebagai `InnerException` dan dicatat `CrashLog`). `PreviewBuild` menjadikannya `Failed` (panel "Pratinjau tidak dapat
+  disusun.", tombol Cetak mati); Cetak langsung menampilkannya di `MessageBox` "Gagal mencetak.". Pratinjau utama tetap memakai dokumen galat
+  seperti sebelumnya.
+- **Konsekuensi.** Pesan di layar memakai `ex.Message` apa adanya untuk galat selain OOM; untuk kegagalan render pesannya sudah bebas path,
+  tetapi galat lain dari pustaka (mis. I/O) dapat memuat path di layar (bukan di kertas). Lihat [SECURITY.md](SECURITY.md#212-pratinjau-cetak-dan-cetak).
+- **Bukti.** `DocumentView.xaml.cs:455-483, 596-602`. Test: `RenderFailure_OnThePrintPath_FailsWithAFriendlyMessage_*`,
+  `RenderFailure_InThePrintWindow_ShowsTheFriendlyMessageInThePanel_*`, `RenderFailure_InTheMainPreview_StillShowsTheErrorDocument_AsBefore`
+  (`PrintContentAndCommandTests.cs:88, 122, 148`; memakai `DocumentView.RenderFaultForTests`).
+
+## ADR-25 Galat pratinjau dibungkus `Guard` dan paket XPS dibersihkan setelah idle
+
+- **Konteks.** Komentar `PreviewBuild.cs:17-21`: pratinjau tidak mengubah dokumen, jadi galatnya selalu boleh dipulihkan dan tidak boleh
+  memicu jalur fatal aplikasi ([ADR-11](#adr-11-crashlog-dan-isrecoverable) menganggap OOM dan `InvalidOperationException` fatal untuk jalur
+  lain). Komentar `PreviewBuild.cs:291-292`: `DocumentViewer` memuat `PageContent` async lewat `pack://`; menutup paket lebih awal membuat
+  pemuatan yang sudah antre melempar `UriFormatException` di dispatcher. Komentar `:259-260`: `CancelAsync` hanya menandai batal, penulis masih
+  bisa menjalankan callback berikutnya.
+- **Keputusan.** Semua penangan peristiwa `PreviewBuild` dibungkus `Guard`: galat (termasuk OOM) menjadikan siklus `Failed` lewat `Fail`
+  (dicatat, penulis dibatalkan, penerima `Changed` yang melempar ikut ditangkap); galat sesudah `Failed`/`Dispose` hanya dicatat. Galat di
+  kode jendela ditangkap `StartBuild`/`OnBuildChanged` dan ditampilkan `ShowFailure`. `Dispose` membuang peristiwa, mematikan paginasi latar,
+  lalu menutup paket hanya setelah penulis XPS melapor batal/selesai, di prioritas `ApplicationIdle`; timer cadangan 10 dtk menutup paket bila
+  laporan itu tidak pernah datang, dan dihentikan begitu pembersihan dijadwalkan. Pembuatan jendela di `PrintPreview_Executed` ditangkap, tetapi
+  `ShowDialog` sengaja di luar `try` (komentar `MainWindow.xaml.cs:608-610`): galat callback selama dialog tampil menjadi urusan
+  `App.OnDispatcherUnhandledException`, bukan ditelan.
+- **Konsekuensi.** Timer cadangan berarti paket bisa ditutup 10 dtk setelah `Dispose` walau penulis belum melapor; dampaknya pada penulis yang
+  masih berjalan **belum diverifikasi**. Galat pada `PreviewBuild` atau jendela tampil sebagai panel galat, bukan dialog.
+- **Bukti.** `PreviewBuild.cs:91-329`, `PrintPreviewWindow.xaml.cs:103-150`. Test: `SubscriberThatThrows_FailsTheBuild_AndNeverReachesTheDispatcher`
+  (`PreviewBuildTests.cs:468`), `Dispose_WhileRendering_KeepsThePackageUntilTheWriterEnds_*`, `Dispose_WhileRendering_ArmsAFallbackTimer_*`,
+  `Dispose_WhenCleanupIsAlreadyScheduledDuringCancel_*`, `RepeatedCycles_DisposedWhileRendering_*` (`:516, 548, 576, 608`),
+  `ClosingRightAfterThePagesAppear_*`, `ChangingLayoutManyTimes_WhileRendering_ThenClosing_*` (`PrintPreviewWindowBehaviorTests.cs:759, 950`).
+
+## ADR-26 Seam khusus test pada kode cetak
+
+- **Konteks.** Dialog sistem (`PrintDialog`), printer, dan kegagalan renderer tidak bisa dipakai di test otomatis (CLAUDE.md: test tidak
+  menyentuh data pengguna; membuka dialog sungguhan menggantung proses test). Komentar `PrintPreviewWindow.xaml.cs:432`: membaca tiket printer lambat.
+- **Keputusan.** Kode produksi menyediakan titik sambung `internal` kecil: `PrintPreviewWindow.ShowPrintDialogForTests` (pengganti `ShowDialog`;
+  false = batal), `DocumentView.RenderFaultForTests` (memaksa kegagalan renderer), konstruktor `PrintSource(snapshot, Task)` (menahan hasil parse),
+  properti `PreviewBuild.Document`/`CleanupFallbackTimer` dan `PrintPreviewWindow.Stage`/`PrintedDocument`, serta helper statis murni
+  (`TicketMatches`, `ApplyTicket`, `PaperName`, `DescribeTicket`). Sisi test: `WpfHost.Run` tidak lagi sekadar `Dispatcher.Invoke`, dan galat
+  yang lolos ke dispatcher dicatat lalu menggagalkan test ([TESTING.md](TESTING.md#thread-sta-dan-wpfhost)).
+- **Konsekuensi.** Permukaan `internal` bertambah. Beberapa test membaca anggota privat lewat refleksi (`PreviewBuild.counter`,
+  `packageUri`, `cleanupScheduled`, metode `Cleanup`); mengganti namanya memecahkan test. Hook dialog hanya menguji cabang "batal"; cabang diterima
+  (`ConfirmPaperMatchesPreview`, `dialog.PrintDocument`) tidak terjangkau test ([ADR-22](#adr-22-pratinjau-punya-pengaturan-kertas-sendiri-dan-konfirmasi-bila-dialog-cetak-berbeda)).
+- **Bukti.** `PrintPreviewWindow.xaml.cs:418-419`, `DocumentView.xaml.cs:486-487`, `PrintLayout.cs:107-112`, `PreviewBuild.cs:82-86`,
+  `PreviewBuildTests.cs:15-16, 430, 544-545, 590, 601`, `Support/WpfHost.cs`.

@@ -24,6 +24,7 @@ public static class AppCommands
         (Key.D0, Ctrl, null), (Key.NumPad0, Ctrl, null));
 
     public static readonly RoutedUICommand ExportHtml = Create("Ekspor sebagai HTML...", nameof(ExportHtml), (Key.E, CtrlShift, null));
+    public static readonly RoutedUICommand PrintPreview = Create("Pratinjau Cetak...", nameof(PrintPreview), (Key.P, CtrlShift, null));
     public static readonly RoutedUICommand FindNext = Create("Cari Berikutnya", nameof(FindNext), (Key.F3, ModifierKeys.None, null));
     public static readonly RoutedUICommand FindPrevious = Create("Cari Sebelumnya", nameof(FindPrevious), (Key.F3, ModifierKeys.Shift, null));
     public static readonly RoutedUICommand SetTheme = Create("Tema", nameof(SetTheme));

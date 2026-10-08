@@ -22,6 +22,9 @@ dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:Publ
   - `MarkdownSupport` - pipeline Markdig (pratinjau `Pipeline`, ekspor `ExportPipeline`), allowlist URL, pemblokiran gambar.
   - `HtmlExporter` - ekspor HTML mandiri; `SingleInstance` - Mutex `Local\` + named pipe (nama memuat id sesi Windows);
     `AppSettings` - settings JSON.
+  - `PrintLayout.cs` (`PageLayout`, `PrintSnapshot`, `PrintSource`, `PrintService`), `HeaderFooterPaginator`, `PreviewBuild`, `PrintPreviewWindow` -
+    Cetak (Ctrl+P) dan Pratinjau Cetak (Ctrl+Shift+P): snapshot teks tab -> parse -> FlowDocument cetak tema Terang -> paginasi + kaki halaman ->
+    halaman XPS di memori untuk `DocumentViewer`; `PreviewBuild.Guard` menangkap semua galat, paket XPS dibersihkan setelah dispatcher idle.
   - `Themes/` - kamus warna Light/Dark dan gaya kontrol.
 - `src/MdViewer.Tests` - xUnit. Test yang menyentuh WPF berjalan lewat `Support/WpfHost` (satu thread STA) dengan
   `[Collection("Wpf")]`; `Support/TempDir` untuk file sementara.
@@ -47,6 +50,8 @@ dotnet publish src/MdViewer -c Release -r win-x64 --self-contained false -p:Publ
   `DocumentTab.SaveTo` menunda pemeriksaan eksternal selama berjalan.
 - Sesi: instance yang dimulai dengan argumen tidak menimpa sesi tersimpan sampai pengguna membuka tab lagi (kiriman instance lain, dialog
   Buka, seret-lepas, Berkas Terakhir) - lewat `OpenUserFile`; sesudahnya sesi disimpan seperti biasa.
+- Cetak/Pratinjau Cetak: dokumen cetak tidak boleh memuat path lokal atau dokumen galat (jalur cetak melempar, `throwOnFailure`); test cetak tanpa
+  printer fisik atau dialog sungguhan (`ShowPrintDialogForTests`), dan galat dispatcher yang diharapkan dibungkus `WpfHost.ExpectUnhandled()`.
 - Galat I/O yang bisa dipulihkan ditangkap dan ditampilkan ke pengguna; galat tak terduga dicatat `CrashLog` (`%LOCALAPPDATA%\MdViewer\crash.log`).
 - Test tidak boleh menyentuh/menulis `%APPDATA%`, `%LOCALAPPDATA%`, dan registri (membaca HKCU Personalize untuk tema diperbolehkan); crash.log pengguna tidak boleh tersentuh (log sudah dialihkan di `TestLogRedirect`); `SingleInstance.Create(scope)`
   memakai scope unik di test. Jangan menjalankan skrip registri sungguhan.

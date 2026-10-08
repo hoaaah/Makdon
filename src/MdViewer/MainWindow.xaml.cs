@@ -589,17 +589,45 @@ public partial class MainWindow : Window
             var dialog = new PrintDialog();
             if (dialog.ShowDialog() != true) return;
 
-            var document = tab.View.BuildPrintDocument();
-            document.PageWidth = dialog.PrintableAreaWidth;
-            document.PageHeight = dialog.PrintableAreaHeight;
-            document.ColumnWidth = dialog.PrintableAreaWidth;
-            dialog.PrintDocument(((IDocumentPaginatorSource)document).DocumentPaginator, tab.Title);
+            // Ukuran halaman = ukuran media terorientasi dari dialog Cetak; tata letak dan kaki halaman sama dengan Pratinjau Cetak.
+            var layout = PageLayout.FromPrintableArea(dialog.PrintableAreaWidth, dialog.PrintableAreaHeight);
+            PrintService.Print(dialog, tab.View.CapturePrintSnapshot(), layout, headerFooter: true);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Driver/antrean printer dapat melempar berbagai jenis pengecualian (PrintQueueException, COMException, ...).
             ShowError("Gagal mencetak.", ex);
         }
+    }
+
+    // Modal: editor tidak bisa diubah selama pratinjau terbuka, dan pratinjau memakai salinan teks saat dibuka (snapshot).
+    void PrintPreview_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (Current is not { } tab) return;
+
+        // Hanya pembuatan jendela yang dibungkus catch-all. ShowDialog sengaja di luarnya: galat dari callback dispatcher
+        // selama dialog tampil ditangani App.OnDispatcherUnhandledException (dan galat kita sendiri di dalam jendela sudah
+        // ditangkap PreviewBuild/PrintPreviewWindow); menelannya di sini hanya meninggalkan aplikasi yang sudah dinyatakan akan ditutup.
+        PrintPreviewWindow window;
+        try
+        {
+            window = new PrintPreviewWindow(tab.View.CapturePrintSnapshot()) { Owner = this };
+        }
+        catch (OutOfMemoryException ex)
+        {
+            CrashLog.Write("Pratinjau cetak kehabisan memori", ex);
+            ShowError("Memori tidak cukup untuk menyusun pratinjau cetak dokumen ini.", ex);
+            return;
+        }
+        catch (Exception ex)
+        {
+            // Dokumen/driver yang tak terduga tidak boleh menjatuhkan aplikasi; pratinjau tidak mengubah dokumen.
+            CrashLog.Write("Pratinjau cetak gagal", ex);
+            ShowError("Gagal membuka pratinjau cetak.", ex);
+            return;
+        }
+
+        window.ShowDialog();
     }
 
     void ViewMode_Executed(object sender, ExecutedRoutedEventArgs e)

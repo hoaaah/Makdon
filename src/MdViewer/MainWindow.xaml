@@ -73,6 +73,7 @@
         <CommandBinding Command="ApplicationCommands.SaveAs" Executed="SaveAs_Executed" CanExecute="HasTab_CanExecute" />
         <CommandBinding Command="ApplicationCommands.Close" Executed="Close_Executed" CanExecute="HasTab_CanExecute" />
         <CommandBinding Command="ApplicationCommands.Print" Executed="Print_Executed" CanExecute="HasTab_CanExecute" />
+        <CommandBinding Command="{x:Static local:AppCommands.PrintPreview}" Executed="PrintPreview_Executed" CanExecute="HasTab_CanExecute" />
         <CommandBinding Command="ApplicationCommands.Find" Executed="Find_Executed" CanExecute="HasTab_CanExecute" />
         <CommandBinding Command="ApplicationCommands.Replace" Executed="Replace_Executed" CanExecute="HasTab_CanExecute" />
         <CommandBinding Command="{x:Static local:AppCommands.FindNext}" Executed="FindNext_Executed" CanExecute="CanEdit_CanExecute" />
@@ -128,6 +129,7 @@
                 <MenuItem Header="Simpan _Sebagai..." Command="ApplicationCommands.SaveAs" InputGestureText="Ctrl+Shift+S" />
                 <MenuItem Header="E_kspor sebagai HTML..." Command="{x:Static local:AppCommands.ExportHtml}" />
                 <Separator />
+                <MenuItem Header="Pra_tinjau Cetak..." Command="{x:Static local:AppCommands.PrintPreview}" />
                 <MenuItem Header="_Cetak..." Command="ApplicationCommands.Print" />
                 <Separator />
                 <MenuItem Header="_Tutup Tab" Command="ApplicationCommands.Close" InputGestureText="Ctrl+W" />
@@ -187,8 +189,11 @@
             <Button Command="ApplicationCommands.Save" ToolTip="Simpan (Ctrl+S)" AutomationProperties.Name="Simpan">
                 <TextBlock Text="&#xE74E;" FontFamily="{StaticResource IconFont}" FontSize="15" />
             </Button>
-            <Button Command="ApplicationCommands.Print" ToolTip="Cetak pratinjau (Ctrl+P)" AutomationProperties.Name="Cetak">
+            <Button Command="ApplicationCommands.Print" ToolTip="Cetak (Ctrl+P)" AutomationProperties.Name="Cetak">
                 <TextBlock Text="&#xE749;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+            </Button>
+            <Button Command="{x:Static local:AppCommands.PrintPreview}" ToolTip="Pratinjau cetak (Ctrl+Shift+P)" AutomationProperties.Name="Pratinjau cetak">
+                <TextBlock Text="&#xE8A1;" FontFamily="{StaticResource IconFont}" FontSize="15" />
             </Button>
             <Separator />
 

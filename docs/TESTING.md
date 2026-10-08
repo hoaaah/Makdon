@@ -5,9 +5,9 @@ manual sebelum rilis.
 **Pembaca:** pengembang yang menjalankan/menulis test dan orang yang menyiapkan rilis. Cara menulis test baru (pola dan aturan):
 [CONTRIBUTING.md](CONTRIBUTING.md#4-cara-menulis-test).
 
-Catatan kejujuran: dokumen ini disusun dengan membaca kode. Run terakhir (2026-10-07, `dotnet test src/MdViewer.Tests`): 1168 kasus
-lulus, 0 gagal, 0 dilewati (durasi sekitar 22 dtk). Jumlah test di tabel = jumlah atribut `[Fact]`/`[Theory]` per berkas (hasil `grep`), bukan jumlah
-kasus yang dieksekusi; satu `[Theory]` bisa menjadi banyak kasus. Total 645 atribut di 17 berkas.
+Catatan kejujuran: dokumen ini disusun dengan membaca kode. Run terakhir (2026-10-08, `dotnet test src/MdViewer.Tests`): 1455 kasus
+lulus, 0 gagal, 0 dilewati (durasi sekitar 55 dtk; sebelum fitur Pratinjau Cetak: 1168 kasus, sekitar 22 dtk). Jumlah test di tabel = jumlah atribut `[Fact]`/`[Theory]` per berkas (hasil `grep`), bukan jumlah
+kasus yang dieksekusi; satu `[Theory]` bisa menjadi banyak kasus. Total 800 atribut di 24 berkas.
 
 ## Peta test: berkas -> area
 
@@ -32,7 +32,14 @@ Proyek `src/MdViewer.Tests` (xUnit 2.9.2, `net9.0-windows`). `[W]` = kelas berta
 | `SmallUtilityTests.cs` | 49 | `ZoomLevelTests`, `TextStatsTests`, `EncodingNamesTests`, `ThemeManagerPureTests`, `EditorThemeContrastTests`, `ConverterTests` |
 | `CrashLogTests.cs` | 7 | `IsRecoverable`, HRESULT yang dikenal, `ShouldShowDialog`, format stempel waktu, `Write` |
 | `ChoiceDialogTests.cs` | 2 | `[W]` `ChoiceDialog`: klik tombol mengembalikan nilai, tutup tanpa memilih = nilai batal |
-| `Support/WpfHost.cs`, `TempDir.cs`, `TestLogRedirect.cs` | - | Infrastruktur (lihat berikut) |
+| `PrintPreviewTests.cs` | 19 | `[W]` `PageLayoutTests` (bawaan A4 potret margin Normal, lanskap menukar sisi, urutan margin, `FromPrintableArea`, margin efektif <= seperempat sisi pendek, `Apply`) dan `PrintPreviewWindowTests` (jendela dibuat di STA, paginasi async, snapshot tak terpengaruh editor, dokumen cetak tetap memblokir gambar remote/UNC, paginator + kaki halaman, halaman XPS sesuai paginator, navigasi dasar) |
+| `PreviewBuildTests.cs` | 32 | `[W]` `PreviewBuild`: tahap Paginating -> Rendering -> Ready berurutan, isi halaman XPS (nama dokumen, "Halaman X dari N", ukuran halaman), dokumen kosong, `Dispose` di tiap tahap (termasuk dari dalam callback), siklus kedua, satu penulis XPS per siklus, galat tak lolos ke dispatcher (penerima `Changed` melempar, OOM), paket dilepas dari `PackageStore`, timer cadangan 10 dtk, sumber parse bersama dan parse latar yang ditahan, kata panjang tak melebihi lebar halaman |
+| `HeaderFooterPaginatorTests.cs` | 18 | `[W]` Kaki halaman: nama + "Halaman X dari N" di tiap halaman, tanpa kaki = halaman identik, jumlah halaman sama dengan/tanpa kaki, kaki di dalam margin bawah dan >= 24 DIP dari tepi untuk tiga preset, halaman yang sama diminta dua kali, halaman di luar rentang, nama dokumen aneh/sangat panjang |
+| `PrintLayoutMatrixTests.cs` | 17 | `[W]` `PageLayoutMatrixTests`: seluruh 12 kombinasi kertas x orientasi x margin, nilai enum di luar rentang, `FromPrintableArea` dengan NaN/tak hingga/terlalu kecil/terlalu besar, `Apply` dua kali dan margin ekstrem, margin lebih lebar tidak pernah memberi halaman lebih sedikit |
+| `PrintContentAndCommandTests.cs` | 23 | `[W]` Dokumen cetak (kertas putih, tema Terang walau aplikasi Gelap, dokumen independen), kegagalan render (`DocumentView.RenderFaultForTests`: pesan ramah tanpa path, bukan dokumen galat), gambar rusak/hilang/valid, ftp/UNC/`file://host`/`data:`/`javascript:` diblokir tanpa koneksi (listener TCP lokal), flag blokir remote dari snapshot, `AppCommands.PrintPreview` (Ctrl+Shift+P) dan keunikan pintasan (membaca teks `MainWindow.xaml`), pengkabelan menu/toolbar, Ctrl+P di panel pratinjau utama, `ApplyTicket`/`TicketMatches`/`DescribeTicket` tanpa printer |
+| `PrintPreviewWindowBehaviorTests.cs` | 42 | `[W]` Kontrol jendela Pratinjau Cetak: pengaturan halaman membangun siklus baru, navigasi (Pertama/Sebelumnya/Berikutnya/Terakhir, kotak halaman, batas), zoom, Esc/Tutup, tombol dan perintah Cetak (via `ShowPrintDialogForTests`), galat dari callback/pembatalan, parse tertahan dan dokumen besar, snapshot tab yang ditutup atau dipindah |
+| `WpfHostErrorTrackingTests.cs` | 4 | `[W]` Pencatat galat dispatcher: galat tak terduga menggagalkan test (sekali), galat dalam `ExpectUnhandled` tidak, galat sesudah scope tetap dilaporkan, galat saat memompa di dalam `Run` tidak menggantung proses |
+| `Support/WpfHost.cs` (+ `DispatcherErrors`, `FailOnUnexpectedDispatcherErrorsAttribute`), `Support/AssemblyInfo.cs`, `Support/PrintTestKit.cs`, `TempDir.cs`, `TestLogRedirect.cs` | - | Infrastruktur (lihat berikut). `PrintTestKit`: halaman kecil `Small` 360 x 420, dokumen contoh, `StartBuild`/`WaitForEnd`/`WaitForPaginated`, pembaca teks glyph halaman XPS dan teks kaki |
 
 Peta area -> berkas untuk keamanan dan keputusan ada di [SECURITY.md](SECURITY.md) dan [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md).
 
@@ -52,12 +59,13 @@ dotnet test MdViewer.sln                                                        
 
 - `--blame-hang-timeout` berguna di sini karena test WPF memompa dispatcher (`ChoiceDialog` modal, `Dispatcher.Invoke`): satu dialog yang
   tidak tertutup atau `Invoke` yang menunggu selamanya akan menggantungkan seluruh proses test. `WpfHost` sendiri menyerah bila thread
-  STA tidak siap dalam 60 dtk (`WpfHost.cs:42`). Nilai `2min` hanya contoh.
+  STA tidak siap dalam 60 dtk (`Support/WpfHost.cs:57`). Nilai `2min` hanya contoh.
 - Tidak ada `Trait`/kategori; penyaringan lewat nama kelas/test. Kelas dengan banyak test lambat bukan terkelompok khusus.
 - Sebelum PR: `dotnet build MdViewer.sln` (harus 0 warning) lalu `dotnet test src/MdViewer.Tests` (semua hijau) - aturan CLAUDE.md.
 - Test tertentu memerlukan waktu nyata: klien pipe macet menunggu batas baca 5 dtk (`Server_StalledClient_IsDroppedAfterTheReadTimeout_*`),
   pola katastrofik menunggu batas regex 2-4 dtk (`TimedOutPattern_*`, `TryFindAll_CatastrophicRegex_*`), render dokumen besar
-  menunggu sampai 20 dtk bila lambat (`UiPump.Until`). Karena itu suite tidak seketika.
+  menunggu sampai 20 dtk bila lambat (`UiPump.Until`). Test pratinjau cetak menunggu dengan batas `PrintTestKit.Patience` (15 dtk),
+  bukan jeda tetap: selesai begitu kondisi terpenuhi, dan kelambatan tampak sebagai gagal. Karena itu suite tidak seketika.
 
 ## Thread STA dan `WpfHost`
 
@@ -65,7 +73,12 @@ dotnet test MdViewer.sln                                                        
   thread STA latar (`IsBackground = true`, nama `MdViewer.Tests STA`), membuat satu `App` (`ShutdownMode.OnExplicitShutdown`, memanggil
   `InitializeComponent()` sehingga resource tema/kontrol dimuat, **tanpa** `OnStartup`: tidak ada single-instance, tidak ada
   `MainWindow`), lalu `Dispatcher.Run()`.
-- Semua test yang menyentuh WPF memanggil `WpfHost.Instance.Run(() => ...)` (`Dispatcher.Invoke`) dan kelasnya `[Collection("Wpf")]`.
+- Semua test yang menyentuh WPF memanggil `WpfHost.Instance.Run(() => ...)` dan kelasnya `[Collection("Wpf")]`. `Run` bukan sekadar
+  `Dispatcher.Invoke`: operasi dijalankan dengan `InvokeAsync` dan ditunggu per 100 ms (`WpfHost.cs:74-104`); galat milik test (mis. `Assert`)
+  ditangkap di thread STA lalu dilempar ulang di thread test. Alasannya (komentar `WpfHost.cs:67-73`): bila callback tertunda melempar saat test
+  memompa dispatcher (`UiPump`) dan galatnya ditelan, WPF meninggalkan frame bersarang itu selamanya sehingga `Invoke` biasa tak pernah
+  kembali dan seluruh proses test menggantung tanpa pesan. Kini, bila galat tercatat dan operasi belum selesai dalam 3 dtk (`GraceAfterError`),
+  test gagal dengan galat itu sebagai pesan. `Run` yang dipanggil dari thread STA (bersarang) langsung menjalankan fungsinya.
   `DocumentTab` menangkap `Dispatcher.CurrentDispatcher`, jadi harus dibuat **di dalam** `Run`.
 - `DispatcherTimer` di tab (render 250 ms, statistik 300 ms, debounce watcher 400 ms, cari 150/250 ms) **hanya berdetak saat dispatcher
   dipompa**: di antara dua `Run`, atau di dalam satu `Run` bila test memompa sendiri lewat `UiPump.For`/`UiPump.Until`
@@ -75,6 +88,18 @@ dotnet test MdViewer.sln                                                        
   satu sama lain, jadi tidak boleh berbagi state statis. State statis yang disentuh test dan harus dipulihkan: `DocumentView.BlockRemoteImages`,
   `ThemeManager` (mode/kamus), `CrashLog.LogPath`, `CultureInfo.CurrentCulture`.
 - `TestLogRedirect` (`[ModuleInitializer]`) mengalihkan `CrashLog.LogPath` ke `%TEMP%\MdViewer.Tests\crash-<pid>.log` saat assembly test dimuat.
+- **Pencatat galat dispatcher** (`Support/WpfHost.cs`). `OnStartup` `App` tidak berjalan di test, jadi `WpfHost` memasang sendiri
+  `DispatcherUnhandledException` yang memasukkan galat ke `DispatcherErrors.Queue` (`WpfHost.Unhandled`) dan menandainya `Handled` (proses
+  test tidak mati, seperti galat yang dipulihkan di aplikasi). Atribut tingkat assembly `[assembly: FailOnUnexpectedDispatcherErrors]`
+  (`Support/AssemblyInfo.cs:4`, kelas `FailOnUnexpectedDispatcherErrorsAttribute`, turunan `BeforeAfterTestAttribute`) memeriksa di akhir
+  **setiap test di koleksi `Wpf`**: bila ada galat yang belum diakui, test itu gagal (sekali; galat yang datang di antara dua test
+  dibebankan ke test berikutnya). Test non-WPF tidak memicu pembuatan `WpfHost` (penanda `DispatcherErrors.Started`).
+  - `WpfHost.ExpectUnhandled()` membuka scope untuk test yang memang menguji bahwa callback melempar: galat selama scope dianggap diharapkan
+    (`scope.Errors` untuk diperiksa); galat yang datang sesudah scope ditutup tetap dilaporkan.
+  - Pola yang dipakai test cetak untuk "tidak ada galat lolos": `var before = WpfHost.Unhandled.Count; ...; Assert.Equal(before, WpfHost.Unhandled.Count);`
+    (selain pemeriksa otomatis di atas, supaya pesan kegagalannya langsung menunjuk test itu).
+  - Perilaku WPF saat galat pecah di dalam frame `UiPump` tidak tetap (kadang frame ditinggalkan, kadang pompa selesai normal);
+    `WpfHostErrorTrackingTests.AnErrorThrownWhilePumpingInsideRun_*` hanya menjamin: kembali (tidak menggantung), galat tercatat, host tetap bisa dipakai.
 - `TempDir`: folder unik `%TEMP%\MdViewer.Tests\<guid>`; kelas test yang membuat tab memanggil `GC.Collect()` +
   `WaitForPendingFinalizers()` sebelum menghapusnya karena `BitmapImage` menahan handle file gambar sampai di-GC.
 - Test mengakses field privat lewat refleksi (`UiPump.IsTimerEnabled`: `statsTimer`, `renderTimer`, `queryTimer`, `refreshTimer`) dan
@@ -86,10 +111,10 @@ Diperiksa dengan `grep` terhadap `src/MdViewer.Tests`; "tidak teruji" berarti ti
 
 | Area | Keterangan |
 | --- | --- |
-| **`MainWindow`** (seluruh isi) | Tidak ada test yang membuat `MainWindow` (satu-satunya sebutan: komentar di `DocumentTabConflictEdgeTests.cs:71`). Tidak teruji: `OpenFile` (cek ukuran 50/500 MB, OOM, tab ganda), antrean konflik (`conflictQueue`/`conflictPromptOpen`), `OnSaveConflict`, `TrySave` (konfirmasi lossy), `preserveStoredSession`/`RestoreSession`/`SaveSettings`, `OpenFromOtherInstance`, seret-lepas, daftar berkas terakhir, handler perintah, `Window_Closing`, handler `ExportHtml_Executed`/`Print_Executed`. Logika di bawahnya (`DocumentTab`, `AppSettings`, `SingleInstance`) teruji terpisah. |
+| **`MainWindow`** (seluruh isi) | Tidak ada test yang membuat `MainWindow` (satu-satunya sebutan: komentar di `DocumentTabConflictEdgeTests.cs:71`; dua test cetak hanya membaca teks `MainWindow.xaml` dengan regex untuk pengkabelan perintah dan keunikan pintasan, `PrintContentAndCommandTests.cs:333, 369`). Tidak teruji: `OpenFile` (cek ukuran 50/500 MB, OOM, tab ganda), antrean konflik (`conflictQueue`/`conflictPromptOpen`), `OnSaveConflict`, `TrySave` (konfirmasi lossy), `preserveStoredSession`/`RestoreSession`/`SaveSettings`, `OpenFromOtherInstance`, seret-lepas, daftar berkas terakhir, handler perintah, `Window_Closing`, handler `ExportHtml_Executed`/`Print_Executed`/`PrintPreview_Executed` (penangkapan OOM/galat saat membuat jendela pratinjau dan `ShowDialog` modal). Logika di bawahnya (`DocumentTab`, `AppSettings`, `SingleInstance`, model cetak) teruji terpisah. |
 | **`App`** | `OnStartup` (urutan single-instance), `OnDispatcherUnhandledException` (keputusan fatal/pulih + dialog), `OnExit`. `CrashLog.IsRecoverable`/`ShouldShowDialog` teruji; pemakaiannya tidak. |
-| **Dialog** | Hanya `ChoiceDialog` (2 test). Dialog sistem (`OpenFileDialog`, `SaveFileDialog`, `PrintDialog`, `MessageBox`) tidak teruji. |
-| **Cetak** | `DocumentView.BuildPrintDocument` teruji (teks hasil, penanda gambar). Mencetak ke printer/PDF, ukuran halaman, dan pagination tidak. |
+| **Dialog** | `ChoiceDialog` diuji sendiri (2 test). Dialog sistem (`OpenFileDialog`, `SaveFileDialog`, `MessageBox`) tidak teruji. `PrintDialog` tidak pernah dibuka di test: tombol/perintah Cetak di jendela pratinjau diuji lewat hook `PrintPreviewWindow.ShowPrintDialogForTests` yang dipakai dengan hasil "batal" saja (`PrintPreviewWindowBehaviorTests.cs:889, 921`). `ConfirmPaperMatchesPreview` (dan `ChoiceDialog` konfirmasi kertas) tidak dijalankan test mana pun; yang teruji hanya pembantu murninya (`TicketMatches`, `ApplyTicket`, `DescribeTicket`, `PrintContentAndCommandTests.cs:421-528`). |
+| **Cetak** | **Teruji:** pembuatan dokumen cetak (`BuildPrintDocument`/`PrintService.CreateDocument`: teks hasil, penanda gambar, kertas putih, tema Terang, ukuran halaman dan margin), paginasi dan ukuran halaman (seluruh kombinasi kertas x orientasi x margin, `FromPrintableArea` dengan nilai tak masuk akal), kaki halaman, `PreviewBuild` (tahap, halaman XPS, `Dispose`, paket di `PackageStore`), jendela pratinjau (pengaturan, navigasi, zoom, tutup, snapshot), pemblokiran gambar remote/UNC/ftp/`data:` pada dokumen cetak. **Tidak teruji:** pencetakan nyata (`dialog.PrintDocument` tidak pernah dijalankan: tidak ada printer fisik, driver, atau "Microsoft Print to PDF" di test), `PrintService.Print` dan `Print_Executed` (Ctrl+P), cabang "dialog diterima" termasuk `ConfirmPaperMatchesPreview`, tampilan piksel halaman (test membaca teks glyph, ukuran, dan kotak kaki, bukan gambar), gambar `http(s)` yang dimuat async di halaman XPS, OOM saat mencetak, dokumen Markdown sangat besar (kinerja tidak diukur otomatis; lihat README, Batasan yang diketahui). |
 | **Visual/tampilan** | Tata letak, gaya `Controls.xaml`/`Preview.xaml`, tampilan tema sebenarnya, DPI tinggi, ikon, title bar gelap (`ApplyTitleBar`), keadaan kosong. Tema hanya diuji sebatas penukaran kamus dan matematika kontras; **kesamaan kunci Light/Dark tidak diuji** (hanya komentar). |
 | **Sinkron scroll dan lompat anchor** | `ScrollToAnchor`/`FindHeading`/`AnchorHeadingRenderer` dan sinkron scroll editor-pratinjau tidak teruji (satu pemanggilan `ScrollToAnchor` hanya untuk "tidak melempar setelah Dispose"). Slug id heading (Markdig) teruji lewat `MarkdownSlugTests`. |
 | **Klik tautan** | Pembungkus `DocumentView.OnHyperlink` (anchor, buka shell untuk `http(s)`/`mailto`, `File.Exists` lalu `RequestOpen`). Resolusi path (`MarkdownSupport.ResolveLinkTarget`) teruji di `LinkResolutionTests.cs`; `RequestOpen` teruji di `DocumentTabTests`. |
@@ -98,7 +123,7 @@ Diperiksa dengan `grep` terhadap `src/MdViewer.Tests`; "tidak teruji" berarti ti
 | **Symlink** | Butuh hak membuat symlink (Developer Mode atau administrator). Test symlink (`WriteBytesAtomic_SymlinkTarget_*`, `ResolveLinkTarget_FollowsAChain*`, `*_BrokenSymlink_*`) **langsung `return` (lulus tanpa menguji apa pun)** bila `CreateSymbolicLink` ditolak; hasil hijau tidak membuktikan jalur itu. Cabang ekspor "symlink di dalam folder menunjuk ke luar" (`MarkdownSupport.cs:333-334`) tidak punya test sama sekali. |
 | **Keamanan pipe lintas-pengguna** | `CurrentUserOnly` tidak diuji menolak pengguna lain (butuh akun kedua). |
 | **Skrip** | `scripts/*.ps1` (registrasi/hapus asosiasi, pembuat ikon) tidak punya test; CLAUDE.md melarang menjalankan skrip registri sungguhan dari test. |
-| **Ketahanan memori** | Jalur `OutOfMemoryException` di `OpenFile`, `ExportHtml_Executed`, dan render; batas 50/500 MB. |
+| **Ketahanan memori** | Jalur `OutOfMemoryException` di `OpenFile`, `ExportHtml_Executed`, `Print_Executed`, `PrintPreview_Executed`, dan render; batas 50/500 MB. Satu-satunya yang teruji: `PreviewBuild.Guard` mengubah OOM yang dilempar penerima `Changed` (buatan test) menjadi tahap `Failed` tanpa lolos ke dispatcher (`SubscriberThatThrows_FailsTheBuild_AndNeverReachesTheDispatcher`, `PreviewBuildTests.cs:468`); kehabisan memori sungguhan pada dokumen sangat besar tidak diuji. |
 | **Registri tema** | `ThemeManager.SystemUsesLightTheme` dan `Apply(System)` hanya diuji terhadap nilai registri mesin yang menjalankan test (hanya baca); perubahan tema sistem saat berjalan (`UserPreferenceChanged`) tidak diuji. |
 | **Multi-instance sungguhan / multi-sesi** | Test memakai scope unik dalam satu proses; peluncuran proses kedua sungguhan dan sesi Remote Desktop tidak diuji. |
 | **Keamanan thread `MarkdownPipeline`** | Pipeline statis dipakai dari thread latar dan UI; tidak ada test konkurensi. |
@@ -154,7 +179,11 @@ Centang tiap butir; catat versi Windows dan DPI.
 **Tema, zoom, cetak**
 - [ ] Terang/Gelap/Ikuti Sistem; ubah tema Windows saat mode Ikuti Sistem; title bar ikut; warna sintaks terbaca di kedua tema; tidak ada kontrol dengan warna tema lain.
 - [ ] Zoom Ctrl+roda, Ctrl+=/-/0; nilai bertahan setelah restart; status bar menampilkan persen.
-- [ ] Ctrl+P ke printer/PDF dari tema gelap: hasil berlatar putih, gambar remote mengikuti opsi blokir.
+- [ ] Ctrl+P ke printer nyata dan ke "Microsoft Print to PDF" dari tema gelap: hasil berlatar putih, margin 0,75", kaki halaman "nama berkas ... Halaman X dari N" terbaca dan tidak terpotong printer, gambar remote mengikuti opsi blokir.
+- [ ] Pratinjau Cetak (Ctrl+Shift+P atau Berkas > Pratinjau Cetak..., tombol toolbar): jendela terbuka tanpa membekukan UI ("Menyusun halaman..." lalu "Menyusun pratinjau..."), halaman tampil putih dengan kaki halaman; ubah Orientasi/Kertas/Margin dan kotak "Nama dan nomor halaman" menyusun ulang; navigasi (Pertama/Sebelumnya/Berikutnya/Terakhir, ketik nomor lalu Enter), zoom (Satu halaman/Lebar halaman/100%, +/-, Ctrl+roda), Esc menutup; edit teks di tab sesudah pratinjau dibuka tidak mengubah pratinjau yang terbuka.
+- [ ] Cetak dari Pratinjau Cetak ke printer nyata dan ke "Microsoft Print to PDF": hasil sama dengan pratinjau (jumlah halaman, kaki halaman, margin). Ganti kertas atau orientasi di dialog Cetak (mis. Letter di pratinjau A4, atau Legal): muncul pertanyaan "Cetak sesuai pratinjau" atau "Batal"; Batal tidak mencetak, "Cetak sesuai pratinjau" mencetak dengan ukuran pratinjau. Tanpa printer terpasang: dialog Cetak sendiri yang melapor, aplikasi tidak crash.
+- [ ] Dokumen sangat besar (mis. 500 KB dan 1,5 MB Markdown): pratinjau utama lambat dan memakai banyak memori (lihat README, Batasan); mode Editor tetap lancar. Buka Pratinjau Cetak untuk dokumen itu dan catat apakah UI tetap responsif, lamanya, dan pesan memori bila gagal (**belum pernah diukur**). Dokumen dengan gambar `http(s)` (blokir remote dimatikan): periksa apakah gambar tampil di halaman pratinjau (bisa kosong, lihat README).
+- [ ] Dokumen dengan gambar rusak (`.png` berisi sampah) dan gambar UNC/`ftp:`: Pratinjau Cetak tetap tersusun dan gambar diganti penanda; tidak ada koneksi jaringan.
 
 **Sesi dan pengaturan**
 - [ ] Buka beberapa tab, tutup, buka lagi: sesi pulih. Buka lewat argumen file lalu tutup: sesi tersimpan sebelumnya **tidak** tertimpa; buka tab lagi di instance itu (dialog Buka/seret-lepas/Berkas Terakhir) lalu tutup: sesinya tersimpan.

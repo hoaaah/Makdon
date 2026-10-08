@@ -6,11 +6,11 @@ Dokumentasi pengguna (fitur, pintasan, build singkat) ada di [../README.md](../R
 
 | Dokumen | Isi | Baca bila |
 | --- | --- | --- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Komponen dan tanggung jawab, diagram komponen, diagram urutan alur utama (startup, buka, render, simpan, perubahan eksternal, ekspor, sesi), model thread, model state | Akan mengubah kode atau mencari "di mana X terjadi" |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Komponen dan tanggung jawab, diagram komponen, diagram urutan alur utama (startup, buka, render, simpan, perubahan eksternal, ekspor, sesi, Pratinjau Cetak, siklus hidup paket XPS dan galat pratinjau), model thread, model state (termasuk `PreviewBuild`) | Akan mengubah kode atau mencari "di mana X terjadi" |
 | [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) | Catatan keputusan (konteks, keputusan, konsekuensi, bukti) | Ingin tahu *mengapa* suatu hal dibuat begitu sebelum mengubahnya |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, build/test/publish, konvensi, cara menulis test, cara menambah tema/perintah/mode/ekstensi/format, checklist PR, larangan, sub-agent | Akan berkontribusi |
 | [SECURITY.md](SECURITY.md) | Model ancaman, kontrol (lokasi kode + test), risiko residual dan yang sudah ditutup | Mengubah ekspor, pratinjau gambar, single-instance, skrip, atau menilai keamanan |
-| [TESTING.md](TESTING.md) | Peta test, cara menjalankan, model STA/`WpfHost`, yang tidak teruji, checklist uji manual rilis | Menjalankan/menulis test atau menyiapkan rilis |
+| [TESTING.md](TESTING.md) | Peta test, cara menjalankan, model STA/`WpfHost` (termasuk pencatat galat dispatcher), yang tidak teruji, checklist uji manual rilis (termasuk cetak) | Menjalankan/menulis test atau menyiapkan rilis |
 
 ## Konvensi dokumen
 
@@ -34,3 +34,12 @@ Ketidaksesuaian yang dicatat saat dokumentasi ini disusun telah diperbaiki; tida
 - `MdViewer.csproj` `<Version>` diubah dari `1.0.0` menjadi `0.1.0` agar cocok dengan CHANGELOG.
 - README menyatakan bahwa `.txt` (dan `.mdown`, `.mkd`) juga diterima seret-lepas dan tautan relatif (`MarkdownFiles.IsMarkdown`),
   sedangkan asosiasi file hanya `.md`/`.markdown`.
+
+## Pembaruan 2026-10-08: Pratinjau Cetak
+
+Dokumen diperbarui untuk fitur Pratinjau Cetak (belum di-commit saat ditulis; 1455 kasus test hijau, 800 atribut `[Fact]`/`[Theory]` di 24 berkas):
+komponen baru dan diagram urutan (ARCHITECTURE 4.9-4.10, 6.5), ADR-19 sampai ADR-26, kontrol dan risiko cetak (SECURITY 2.12, R8), peta test dan
+infrastruktur test baru (TESTING), aturan test cetak (CONTRIBUTING 4.2 aturan 8-9). Nomor baris rujukan ke `MainWindow.xaml.cs`,
+`DocumentView.xaml.cs`, dan `Support/WpfHost.cs` yang bergeser oleh perubahan ini sudah disesuaikan. Hal yang sengaja ditandai "belum diverifikasi":
+bahwa `DocumentViewer` hanya menerima dokumen tetap (hanya dari komentar kode), bahwa mengubah `dialog.PrintTicket` dipakai saat mencetak,
+dan kinerja/memori Pratinjau Cetak untuk dokumen sangat besar.

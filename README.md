@@ -21,7 +21,16 @@ Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit
 - Deteksi perubahan dari luar: tab bersih dimuat ulang otomatis (bisa di-Undo); tab yang punya perubahan menanyakan
   Anda satu per satu (**Muat dari Disk** atau **Pertahankan Editor**). Dialog konflik tidak pernah bertumpuk: konflik
   lain (termasuk dari simpan) menunggu giliran.
-- Ekspor ke HTML mandiri dan cetak pratinjau.
+- Ekspor ke HTML mandiri.
+- Cetak (Ctrl+P) dan **Pratinjau Cetak** (Ctrl+Shift+P, menu Berkas > Pratinjau Cetak..., atau tombol di toolbar). Pratinjau Cetak membuka
+  jendela modal berisi halaman seperti yang akan tercetak: kertas A4 atau Letter, potret atau lanskap, margin Sempit (0,5"), Normal
+  (0,75", bawaan) atau Lebar (1"), dan kaki halaman berisi nama berkas di kiri dan "Halaman X dari N" di kanan (bisa dimatikan; kaki berada
+  di dalam margin bawah sehingga tidak menggeser isi). Ada navigasi halaman (pertama/sebelumnya/berikutnya/terakhir, ketik nomor lalu
+  Enter) dan zoom (Satu halaman, Lebar halaman, 100%, tombol +/-, Ctrl+roda). Halaman disusun bertahap (paginasi dan penulisan
+  halaman tidak memblokir UI untuk dokumen biasa) dengan indikator "Menyusun halaman...", dan isinya adalah salinan teks tab saat pratinjau dibuka: mengedit tab sesudahnya tidak mengubah
+  pratinjau yang terbuka. Hasil cetak selalu berlatar putih dengan tema Terang walau aplikasi bertema Gelap. Tombol **Cetak...** di
+  jendela pratinjau mencetak halaman yang sama dengan yang tampil. Bila kertas atau orientasi yang dipilih di dialog Cetak berbeda dari
+  pratinjau, Anda ditanya: "Cetak sesuai pratinjau" atau "Batal" (halaman pratinjau berukuran tetap).
 - Satu instance per pengguna per sesi Windows: membuka file `.md` saat MdViewer sudah berjalan (di sesi yang sama)
   membukanya sebagai tab di jendela yang ada. Sesi Windows lain (mis. Remote Desktop) punya instance sendiri.
 
@@ -36,11 +45,13 @@ Editor dan pratinjau Markdown untuk Windows (WPF, .NET 9). Buka file `.md`, edit
   - Ada anggaran total penyematan 30 MB per ekspor (tiap kemunculan gambar dihitung, karena menambah ukuran HTML).
     Setelah habis, gambar berikutnya dibiarkan sebagai path relatif. Gambar yang sama dibaca dan dikodekan sekali.
     Bila memori tetap tidak cukup, ekspor dibatalkan dengan pesan, bukan menutup aplikasi.
-- Pratinjau dan cetak hanya memuat file lokal dan `http(s)`. Gambar remote (`http`/`https`) diganti teks
+- Pratinjau, cetak, dan Pratinjau Cetak hanya memuat file lokal dan `http(s)`. Gambar remote (`http`/`https`) diganti teks
   `[gambar remote diblokir]` secara bawaan agar dokumen tidak bisa melacak Anda; aktifkan lewat Tampilan > Muat gambar
   remote. Gambar ke share UNC (`\\host\...`, `file://host/...`) dan skema lain (`ftp:`, dll.) selalu diblokir tanpa
   koneksi jaringan apa pun. Gambar `data:` tidak ditampilkan di pratinjau (diganti penanda) karena WPF tidak
   mendukungnya, tetapi tetap disertakan di ekspor HTML bila tipenya sah (png/jpeg/gif/webp).
+- Dokumen cetak tidak memuat path lokal: kaki halaman hanya berisi nama berkas, dan bila dokumen gagal dirender, kegagalan itu ditampilkan di
+  layar (pesan ramah, rincian di `crash.log`), bukan dicetak sebagai halaman galat.
 
 ## Dokumentasi
 
@@ -64,6 +75,7 @@ Riwayat perubahan: [CHANGELOG.md](CHANGELOG.md).
 | Ctrl+= / Ctrl+- / Ctrl+0 | Perbesar / Perkecil / Zoom normal |
 | Ctrl+Shift+E | Ekspor sebagai HTML |
 | Ctrl+P | Cetak |
+| Ctrl+Shift+P | Pratinjau Cetak (Ctrl+P di jendela pratinjau = Cetak...) |
 | Esc | Tutup panel cari |
 
 ## Build, test, publish
@@ -105,7 +117,7 @@ dan angka (mis. `.md`).
 | Data | Lokasi |
 | --- | --- |
 | Pengaturan (tema, zoom, berkas terakhir, sesi, blokir gambar remote) | `%APPDATA%\MdViewer\settings.json` |
-| Catatan galat | `%LOCALAPPDATA%\MdViewer\crash.log` (bila lebih dari 512 KB, seluruh file dihapus lalu entri baru ditulis) |
+| Catatan galat | `%LOCALAPPDATA%\MdViewer\crash.log` (bila lebih dari 512 KB, seluruh file dihapus lalu entri baru ditulis); kegagalan Pratinjau Cetak juga dicatat di sini |
 
 Settings yang rusak atau hilang diabaikan (kembali ke bawaan). Saat keluar, daftar berkas terakhir digabung dengan isi
 file di disk supaya beberapa instance tidak saling menimpa.
@@ -136,3 +148,14 @@ saat keluar menyimpan sesinya seperti instance tanpa argumen.
 - Pencarian regex yang terlalu lambat (batas 2 detik per kecocokan, 4 detik total) tidak diulang otomatis dengan pola
   yang sama; ubah pola atau opsi untuk mencoba lagi.
 - Belum ada pemeriksa ejaan, penyimpanan otomatis, atau pemulihan draf untuk dokumen tanpa judul yang belum disimpan.
+- **Markdown yang sangat besar lambat dibuka di pratinjau utama** (mode Terpisah dan Pratinjau). Hasil pengukuran: WPF menata satu
+  `FlowDocument` raksasa secara superlinear, sehingga membuka file sekitar 200 KB memakan ±8 detik dan ±370 MB memori, 500 KB ±16 detik
+  dan ±490 MB, dan 1,5 MB lebih dari 5 menit dengan memori sampai ±1 GB, dengan UI sempat tidak merespons. Versi sebelum dan sesudah
+  fitur Pratinjau Cetak sama. Mengurai Markdown dan editornya tidak bermasalah (mode Editor untuk file 1,5 MB terbuka dalam kurang dari
+  2 detik). Saran: untuk file yang sangat besar pakai mode **Editor** (Ctrl+1). Kinerja Pratinjau Cetak untuk dokumen sebesar itu belum diukur.
+- Cetak dan Pratinjau Cetak: gambar `http(s)` (bila "Muat gambar remote" diaktifkan) dimuat WPF secara async, jadi di halaman pratinjau
+  (XPS) bisa belum tampil/kosong; gambar lokal tidak terpengaruh. Pengaturan kertas, orientasi, margin, dan kaki halaman di jendela
+  pratinjau tidak disimpan dan kembali ke A4, potret, Normal, kaki halaman menyala setiap kali dibuka. Hanya A4 dan Letter yang punya
+  preset; kertas lain hanya bisa dicetak dengan ukuran pratinjau. Rentang halaman tidak diaktifkan di dialog Cetak (kode tidak mengatur `UserPageRangeEnabled`), jadi seluruh dokumen dicetak.
+  Pencetakan sinkron: UI diam selama dokumen dikirim ke printer. Belum diuji dengan printer fisik (hanya pembuatan halaman dan alur
+  jendelanya yang diuji otomatis; pencetakan nyata, termasuk "Microsoft Print to PDF", belum diuji).

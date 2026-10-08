@@ -24,7 +24,7 @@ public partial class DocumentView : System.Windows.Controls.UserControl, IDispos
     const int LargeDocumentChars = 200_000;
     const int HugeDocumentChars = 1_000_000;
     // Di atas ukuran ini, parsing Markdig dijalankan di thread latar.
-    const int BackgroundParseChars = 100_000;
+    internal const int BackgroundParseChars = 100_000;
     // Di atas ukuran ini statistik kata/karakter dihitung lebih jarang.
     const int SlowStatsChars = 1_000_000;
 
@@ -69,6 +69,12 @@ public partial class DocumentView : System.Windows.Controls.UserControl, IDispos
         FindBar.Attach(Editor);
 
         Preview.CommandBindings.Add(new CommandBinding(Commands.Hyperlink, OnHyperlink));
+        // FlowDocumentScrollViewer punya pengikatan kelas sendiri untuk Cetak (Ctrl+P) yang mencetak dokumen pratinjau apa adanya
+        // (tema aktif, tanpa tata letak/kaki halaman PrintService) dan mendahului CommandBinding jendela. Teruskan ke jalur jendela;
+        // target = DocumentView (di atas Preview) supaya pengikatan ini tidak dilewati lagi.
+        Preview.CommandBindings.Add(new CommandBinding(ApplicationCommands.Print,
+            (_, e) => { ApplicationCommands.Print.Execute(null, this); e.Handled = true; },
+            (_, e) => { e.CanExecute = ApplicationCommands.Print.CanExecute(null, this); e.Handled = true; }));
         Preview.SizeChanged += OnPreviewSizeChanged;
 
         statsTimer.Tick += (_, _) => { statsTimer.Stop(); UpdateStats(); };
@@ -446,9 +452,11 @@ public partial class DocumentView : System.Windows.Controls.UserControl, IDispos
     }
 
     // Resources (opsional) dipasang sebelum render supaya style dokumen langsung memakai kamus itu.
-    // Tidak pernah melempar (kecuali galat fatal): bila renderer gagal, gambar yang tidak bisa dimuat diganti teks
-    // pengganti lalu dirender ulang; bila masih gagal, pratinjau berisi pesan galat. Semua kegagalan dicatat di crash.log.
-    static FlowDocument CreateFlowDocument(MarkdownDocument parsed, ResourceDictionary? resources)
+    // Bila renderer gagal, gambar yang tidak bisa dimuat diganti teks pengganti lalu dirender ulang; bila masih gagal,
+    // pratinjau berisi pesan galat (dokumen galat) dan tidak melempar. Semua kegagalan dicatat di crash.log.
+    // throwOnFailure (jalur cetak/pratinjau cetak): dokumen galat tidak boleh dicetak dan memuat path profil
+    // pengguna (lokasi crash.log), jadi kegagalan akhir dilempar sebagai galat berpesan ramah untuk ditampilkan pemanggil.
+    static FlowDocument CreateFlowDocument(MarkdownDocument parsed, ResourceDictionary? resources, bool throwOnFailure = false)
     {
         try
         {
@@ -467,12 +475,20 @@ public partial class DocumentView : System.Windows.Controls.UserControl, IDispos
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             CrashLog.Write("Render pratinjau gagal setelah gambar rusak diganti", ex);
+            if (throwOnFailure)
+                throw new InvalidOperationException(
+                    $"Dokumen tidak dapat disusun untuk dicetak karena terjadi kesalahan saat merender isinya ({ex.GetType().Name}). " +
+                    "Isi file tidak berubah. Rincian ada di crash.log.", ex);
             return CreateErrorDocument(resources, ex);
         }
     }
 
+    /// <summary>Hanya untuk pengujian: dipanggil di awal setiap render dokumen, mis. untuk memaksa kegagalan renderer.</summary>
+    internal static Action<MarkdownDocument>? RenderFaultForTests;
+
     static FlowDocument BuildFlowDocument(MarkdownDocument parsed, ResourceDictionary? resources)
     {
+        RenderFaultForTests?.Invoke(parsed);
         var flowDocument = new FlowDocument();
         if (resources is not null) flowDocument.Resources.MergedDictionaries.Add(resources);
 
@@ -563,10 +579,23 @@ public partial class DocumentView : System.Windows.Controls.UserControl, IDispos
     /// Dokumen untuk dicetak: dirender ulang dengan tema Terang (kertas putih), lebar penuh halaman.
     /// Ukuran halaman diatur pemanggil sesuai area cetak printer.
     /// </summary>
-    public FlowDocument BuildPrintDocument()
+    public FlowDocument BuildPrintDocument() => BuildPrintDocument(CapturePrintSnapshot());
+
+    /// <summary>Salinan teks tab saat ini + pengaturan render, untuk pratinjau/cetak yang tak terpengaruh penyuntingan berikutnya.</summary>
+    public PrintSnapshot CapturePrintSnapshot() =>
+        new(tab.Document.Text, tab.FilePath is null ? null : Path.GetDirectoryName(tab.FilePath), BlockRemoteImages, tab.Title);
+
+    // Gambar remote/UNC diblokir oleh ResolveImageUrls (lewat ParseDocument) sama seperti pratinjau.
+    internal static MarkdownDocument ParsePrintSnapshot(PrintSnapshot snapshot) =>
+        ParseDocument(snapshot.Text, snapshot.BaseDirectory, snapshot.BlockRemoteImages);
+
+    internal static FlowDocument BuildPrintDocument(PrintSnapshot snapshot) => BuildPrintDocument(ParsePrintSnapshot(snapshot));
+
+    // Dari AST yang sudah diparse (boleh dipakai berulang di thread UI): renderer hanya membaca AST; satu-satunya perubahan
+    // adalah ReplaceUnloadableImages pada jalur galat, dan itu idempoten.
+    internal static FlowDocument BuildPrintDocument(MarkdownDocument parsed)
     {
-        var baseDir = tab.FilePath is null ? null : Path.GetDirectoryName(tab.FilePath);
-        var document = CreateFlowDocument(ParseDocument(tab.Document.Text, baseDir, BlockRemoteImages), ThemeManager.LoadDictionary(dark: false));
+        var document = CreateFlowDocument(parsed, ThemeManager.LoadDictionary(dark: false), throwOnFailure: true);
         document.PagePadding = new Thickness(48);
         document.Background = Brushes.White;
         return document;

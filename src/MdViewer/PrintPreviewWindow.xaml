@@ -1,0 +1,191 @@
+<Window x:Class="MdViewer.PrintPreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource AppWindow}"
+        Title="Pratinjau Cetak" Icon="Assets/app.ico"
+        Width="1040" Height="820" MinWidth="720" MinHeight="480"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <!-- Pembungkus segmented control (sama dengan toolbar utama). -->
+        <Style x:Key="SegmentedHost" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="GroupLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+
+        <!-- DocumentViewer bawaan memakai toolbar dan warna Aero sendiri; di sini hanya area gulir bertema, kontrolnya buatan sendiri. -->
+        <Style TargetType="DocumentViewer">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DocumentViewer">
+                        <Border Background="{TemplateBinding Background}" Focusable="False">
+                            <ScrollViewer x:Name="PART_ContentHost" CanContentScroll="True" Focusable="False"
+                                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Pengaturan halaman -->
+        <Border Grid.Row="0" Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1" Padding="10,6">
+            <DockPanel LastChildFill="False">
+                <Button x:Name="CloseButton" DockPanel.Dock="Right" Padding="14,5" Margin="8,0,0,0" VerticalAlignment="Top" Click="Close_Click"
+                        ToolTip="Tutup pratinjau (Esc)" AutomationProperties.Name="Tutup">
+                    <TextBlock Text="Tutup" />
+                </Button>
+                <Button x:Name="PrintButton" DockPanel.Dock="Left" Style="{StaticResource AccentButton}" Padding="14,5" Margin="0,0,14,0" VerticalAlignment="Top"
+                        Click="Print_Click" ToolTip="Cetak dokumen ini (Ctrl+P)" AutomationProperties.Name="Cetak">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE749;" FontFamily="{StaticResource IconFont}" Margin="0,1,8,0" />
+                        <TextBlock Text="Cetak..." />
+                    </StackPanel>
+                </Button>
+
+                <WrapPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" Margin="0,2,14,2">
+                        <TextBlock Text="Orientasi" Style="{StaticResource GroupLabel}" />
+                        <Border Style="{StaticResource SegmentedHost}" AutomationProperties.Name="Orientasi kertas">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="PortraitButton" Content="Potret" GroupName="Orientation" IsChecked="True"
+                                             Style="{StaticResource SegmentedItem}" Checked="Orientation_Checked"
+                                             ToolTip="Kertas tegak" />
+                                <RadioButton x:Name="LandscapeButton" Content="Lanskap" GroupName="Orientation"
+                                             Style="{StaticResource SegmentedItem}" Checked="Orientation_Checked"
+                                             ToolTip="Kertas mendatar" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,2,14,2">
+                        <TextBlock Text="Kertas" Style="{StaticResource GroupLabel}" />
+                        <Border Style="{StaticResource SegmentedHost}" AutomationProperties.Name="Ukuran kertas">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="A4Button" Content="A4" GroupName="Paper" IsChecked="True"
+                                             Style="{StaticResource SegmentedItem}" Checked="Paper_Checked"
+                                             ToolTip="A4 (210 x 297 mm)" />
+                                <RadioButton x:Name="LetterButton" Content="Letter" GroupName="Paper"
+                                             Style="{StaticResource SegmentedItem}" Checked="Paper_Checked"
+                                             ToolTip="Letter (8,5 x 11 inci)" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,2,14,2">
+                        <TextBlock Text="Margin" Style="{StaticResource GroupLabel}" />
+                        <Border Style="{StaticResource SegmentedHost}" AutomationProperties.Name="Margin halaman">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="NarrowMarginButton" Content="Sempit" GroupName="Margin"
+                                             Style="{StaticResource SegmentedItem}" Checked="Margin_Checked"
+                                             ToolTip="Margin 0,5 inci (12,7 mm)" />
+                                <RadioButton x:Name="NormalMarginButton" Content="Normal" GroupName="Margin" IsChecked="True"
+                                             Style="{StaticResource SegmentedItem}" Checked="Margin_Checked"
+                                             ToolTip="Margin 0,75 inci (19 mm)" />
+                                <RadioButton x:Name="WideMarginButton" Content="Lebar" GroupName="Margin"
+                                             Style="{StaticResource SegmentedItem}" Checked="Margin_Checked"
+                                             ToolTip="Margin 1 inci (25,4 mm)" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <CheckBox x:Name="FooterCheck" Content="Nama dan nomor halaman" IsChecked="True" VerticalAlignment="Center"
+                              Margin="0,2,0,2" Checked="Footer_Changed" Unchecked="Footer_Changed"
+                              ToolTip="Cetak nama dokumen dan &quot;Halaman X dari N&quot; di kaki halaman (di dalam margin bawah)" />
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Pratinjau halaman -->
+        <Grid Grid.Row="1">
+            <DocumentViewer x:Name="Viewer" PreviewMouseWheel="Viewer_PreviewMouseWheel" SizeChanged="Viewer_SizeChanged"
+                            AutomationProperties.Name="Pratinjau halaman cetak" />
+
+            <!-- Selama paginasi (async) viewer ditutup indikator ini; UI tetap responsif. -->
+            <Border x:Name="BusyPanel" Background="{DynamicResource SurfaceAltBrush}" Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="BusyText" Text="Menyusun halaman..." FontSize="18" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock x:Name="BusyDetail" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center"
+                               Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Navigasi halaman dan zoom -->
+        <Border Grid.Row="2" Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0" Padding="10,5">
+            <DockPanel LastChildFill="False">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Border Style="{StaticResource SegmentedHost}" AutomationProperties.Name="Mode zoom">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="FitPageButton" Content="Satu halaman" GroupName="Zoom" IsChecked="True"
+                                         Style="{StaticResource SegmentedItem}" Checked="Zoom_Checked" Tag="FitPage"
+                                         ToolTip="Seluruh halaman terlihat" />
+                            <RadioButton x:Name="FitWidthButton" Content="Lebar halaman" GroupName="Zoom"
+                                         Style="{StaticResource SegmentedItem}" Checked="Zoom_Checked" Tag="FitWidth"
+                                         ToolTip="Sesuaikan lebar halaman dengan jendela" />
+                            <RadioButton x:Name="ActualSizeButton" Content="100%" GroupName="Zoom"
+                                         Style="{StaticResource SegmentedItem}" Checked="Zoom_Checked" Tag="Actual"
+                                         ToolTip="Ukuran sebenarnya" />
+                        </StackPanel>
+                    </Border>
+                    <Button x:Name="ZoomOutButton" Style="{StaticResource IconButton}" Margin="8,0,0,0" Click="ZoomOut_Click"
+                            ToolTip="Perkecil" AutomationProperties.Name="Perkecil">
+                        <TextBlock Text="&#x2212;" FontSize="18" />
+                    </Button>
+                    <TextBlock x:Name="ZoomText" Text="100%" MinWidth="44" TextAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextMutedBrush}" ToolTip="Zoom saat ini"
+                               AutomationProperties.Name="Zoom saat ini" />
+                    <Button x:Name="ZoomInButton" Style="{StaticResource IconButton}" Click="ZoomIn_Click"
+                            ToolTip="Perbesar" AutomationProperties.Name="Perbesar">
+                        <TextBlock Text="+" FontSize="18" />
+                    </Button>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button x:Name="FirstPageButton" Style="{StaticResource IconButton}" Click="FirstPage_Click"
+                            ToolTip="Halaman pertama" AutomationProperties.Name="Halaman pertama">
+                        <TextBlock Text="&#xE892;" FontFamily="{StaticResource IconFont}" FontSize="13" />
+                    </Button>
+                    <Button x:Name="PreviousPageButton" Style="{StaticResource IconButton}" Click="PreviousPage_Click"
+                            ToolTip="Halaman sebelumnya" AutomationProperties.Name="Halaman sebelumnya">
+                        <TextBlock Text="&#xE76B;" FontFamily="{StaticResource IconFont}" FontSize="13" />
+                    </Button>
+                    <TextBlock Text="Halaman" VerticalAlignment="Center" Margin="8,0,6,0" />
+                    <TextBox x:Name="PageBox" Width="48" MinHeight="26" Padding="4,2" TextAlignment="Center"
+                             PreviewKeyDown="PageBox_PreviewKeyDown" LostFocus="PageBox_LostFocus"
+                             ToolTip="Nomor halaman (Enter untuk pindah)" AutomationProperties.Name="Nomor halaman" />
+                    <TextBlock x:Name="PageCountText" VerticalAlignment="Center" Margin="6,0,8,0"
+                               AutomationProperties.Name="Jumlah halaman" />
+                    <Button x:Name="NextPageButton" Style="{StaticResource IconButton}" Click="NextPage_Click"
+                            ToolTip="Halaman berikutnya" AutomationProperties.Name="Halaman berikutnya">
+                        <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="13" />
+                    </Button>
+                    <Button x:Name="LastPageButton" Style="{StaticResource IconButton}" Click="LastPage_Click"
+                            ToolTip="Halaman terakhir" AutomationProperties.Name="Halaman terakhir">
+                        <TextBlock Text="&#xE893;" FontFamily="{StaticResource IconFont}" FontSize="13" />
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
