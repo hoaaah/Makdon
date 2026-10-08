@@ -1,0 +1,91 @@
+# Rilis Makdon: dipicu tag v*. Rancangan: docs/DISTRIBUTION.md bagian 8.
+# Langkah build/test/publish/installer/zip/checksum ada di scripts/build-release.ps1 (bisa dijalankan lokal).
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  # Versi Inno Setup disematkan; jangan mengandalkan image runner.
+  INNO_SETUP_VERSION: '6.7.1'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Tag harus sama dengan Version di Makdon.csproj
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $xml = [xml](Get-Content src/Makdon/Makdon.csproj -Raw)
+          $version = ($xml.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
+          if (-not $version) { throw '<Version> tidak ditemukan di Makdon.csproj.' }
+          $tag = $env:TAG
+          if ($tag -ne "v$version") { throw "Tag '$tag' tidak sama dengan v$version (Version di Makdon.csproj)." }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Pasang Inno Setup (versi tersemat)
+        shell: pwsh
+        run: |
+          choco install innosetup --version=$env:INNO_SETUP_VERSION --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw 'Pemasangan Inno Setup gagal.' }
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe tidak ditemukan di $iscc." }
+          "ISCC_PATH=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build, test, publish, installer, zip, checksum
+        shell: pwsh
+        run: ./scripts/build-release.ps1 -RequireInstaller -VerifyInstallerContents -IsccPath $env:ISCC_PATH
+
+      - name: Attestation asal-usul build
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: |
+            artifacts/${{ env.VERSION }}/Makdon-${{ env.VERSION }}-setup-x64.exe
+            artifacts/${{ env.VERSION }}/Makdon-${{ env.VERSION }}-portable-x64.zip
+
+      - name: Buat draft rilis, unggah aset, lalu publikasikan
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $dir = "artifacts/$env:VERSION"
+          $setup = "$dir/Makdon-$env:VERSION-setup-x64.exe"
+          $zip = "$dir/Makdon-$env:VERSION-portable-x64.zip"
+          $sums = "$dir/SHA256SUMS.txt"
+          $sumsText = (Get-Content $sums -Raw).Trim()
+          $notes = @"
+          Makdon $env:VERSION
+
+          Tidak ditandatangani (SmartScreen dapat memperingatkan; lihat README). Verifikasi unduhan dengan checksum SHA256:
+
+          ``````
+          $sumsText
+          ``````
+
+          PowerShell: ``(Get-FileHash .\Makdon-$env:VERSION-setup-x64.exe -Algorithm SHA256).Hash``
+          "@
+          # Draft dulu supaya aset lengkap sebelum rilis dikunci (immutable releases).
+          gh release create "$env:TAG" --draft --title "Makdon $env:VERSION" --notes "$notes" --verify-tag
+          if ($LASTEXITCODE -ne 0) { throw 'Gagal membuat draft rilis.' }
+          gh release upload "$env:TAG" $setup $zip $sums
+          if ($LASTEXITCODE -ne 0) { throw 'Gagal mengunggah aset.' }
+          gh release edit "$env:TAG" --draft=false
+          if ($LASTEXITCODE -ne 0) { throw 'Gagal mempublikasikan rilis.' }

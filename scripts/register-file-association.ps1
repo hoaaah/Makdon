@@ -19,7 +19,7 @@
   Batalkan dengan unregister-file-association.ps1.
 
 .PARAMETER ExePath
-  Path Makdon.exe. Bawaan: hasil publish (src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe),
+  Path Makdon.exe. Bawaan: hasil publish (src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe),
   atau Makdon.exe di samping skrip ini.
 
 .PARAMETER Extensions
@@ -50,14 +50,14 @@ $Description = 'Editor dan pratinjau Markdown'
 
 if (-not $ExePath) {
     $candidates = @(
-        (Join-Path $PSScriptRoot '..\src\Makdon\bin\Release\net9.0-windows\win-x64\publish\Makdon.exe'),
+        (Join-Path $PSScriptRoot '..\src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe'),
         (Join-Path $PSScriptRoot '..\publish\Makdon.exe'),
         (Join-Path $PSScriptRoot 'Makdon.exe')
     )
     $ExePath = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 }
 if (-not $ExePath -or -not (Test-Path -LiteralPath $ExePath)) {
-    throw "Makdon.exe tidak ditemukan. Jalankan 'dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true' atau berikan -ExePath."
+    throw "Makdon.exe tidak ditemukan. Jalankan 'dotnet publish src/Makdon -p:PublishProfile=win-x64' atau berikan -ExePath."
 }
 $ExePath = (Resolve-Path -LiteralPath $ExePath).Path
 
