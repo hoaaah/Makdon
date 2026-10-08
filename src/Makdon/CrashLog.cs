@@ -22,8 +22,7 @@ static class CrashLog
     static readonly Dictionary<string, DateTimeOffset> RecentDialogs = [];
 
     /// <summary>Lokasi file log; bisa diganti (mis. oleh test) supaya tidak mengotori log pengguna.</summary>
-    public static string LogPath { get; set; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Makdon", "crash.log");
+    public static string LogPath { get; set; } = AppPaths.Current.CrashLogPath;
 
     public static void Write(string context, Exception exception, string? logPath = null)
     {

@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -48,6 +49,7 @@ public partial class MainWindow : Window
         UpdateEmptyState();
         UpdateZoomText();
         UpdateThemeChecks();
+        SchedulePortableStartupChecks();
         SourceInitialized += (_, _) => ThemeManager.ApplyTitleBar(this);
         ThemeManager.ThemeChanged += OnThemeChanged;
         Activated += (_, _) => Current?.CheckExternalChange();
@@ -472,6 +474,169 @@ public partial class MainWindow : Window
 
     void ShowError(string message, Exception ex) =>
         MessageBox.Show(this, $"{message}\n\n{ex.Message}", AppName, MessageBoxButton.OK, MessageBoxImage.Error);
+
+    // ---- Integrasi Explorer (portable) dan Tentang ----
+
+    FileAssociation? association;
+    bool portableChecksStarted;
+
+    FileAssociation Association => association ??= FileAssociation.ForCurrentProcess();
+
+    // Pemeriksaan startup portable: setelah jendela tampil (dialog tidak menahan pembukaan berkas) dan di prioritas idle.
+    void SchedulePortableStartupChecks()
+    {
+        if (!AppPaths.Current.IsPortable) return;
+        ExplorerIntegrationItem.Visibility = Visibility.Visible;
+        ExplorerIntegrationSeparator.Visibility = Visibility.Visible;
+        ContentRendered += (_, _) =>
+        {
+            if (portableChecksStarted) return;
+            portableChecksStarted = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, RunPortableStartupChecks);
+        };
+    }
+
+    void RunPortableStartupChecks()
+    {
+        if (closing || closed) return;
+
+        if (!AppPaths.Current.IsDataDirectoryWritable())
+        {
+            MessageBox.Show(this,
+                $"Folder data portable tidak bisa ditulisi:\n{AppPaths.Current.DataDirectory}\n\n" +
+                "Pengaturan dan sesi hanya berlaku selama Makdon berjalan dan tidak disimpan. " +
+                "Pindahkan folder Makdon ke lokasi yang bisa ditulisi.",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        try
+        {
+            var assoc = Association;
+            switch (assoc.CheckStartup())
+            {
+                case StartupIssue.StalePath:
+                    var stale = assoc.GetStatus().RegisteredExe;
+                    if (ChoiceDialog.Show(this, AppName,
+                            $"Pendaftaran \"Buka dengan\" Makdon menunjuk ke berkas yang sudah tidak ada:\n{stale}\n\n" +
+                            $"Perbarui agar menunjuk ke Makdon ini?\n{AppPaths.Current.ExePath}",
+                            cancelValue: false,
+                            new DialogChoice<bool>("Perbarui", true, IsDefault: true),
+                            new DialogChoice<bool>("Biarkan", false)))
+                        assoc.Register();
+                    break;
+
+                case StartupIssue.ShadowsInstallation:
+                    if (ChoiceDialog.Show(this, AppName,
+                            $"Makdon terpasang terdeteksi di:\n{assoc.FindInstallation()}\n\n" +
+                            "Namun pendaftaran \"Buka dengan\" di akun Anda masih menunjuk ke Makdon portable ini dan menutupi versi terpasang. " +
+                            "Cabut pendaftaran portable?",
+                            cancelValue: false,
+                            new DialogChoice<bool>("Cabut Pendaftaran", true, IsDefault: true),
+                            new DialogChoice<bool>("Biarkan", false)))
+                        assoc.Unregister();
+                    break;
+            }
+        }
+        catch (Exception ex) when (IsRegistryError(ex))
+        {
+            CrashLog.Write("Pemeriksaan pendaftaran \"Buka dengan\" saat startup gagal", ex);
+            ShowError("Pendaftaran \"Buka dengan\" tidak bisa diperiksa atau diubah.", ex);
+        }
+    }
+
+    static bool IsRegistryError(Exception ex) =>
+        ex is System.Security.SecurityException or UnauthorizedAccessException or IOException or ArgumentException;
+
+    void ExplorerIntegration_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (!ReferenceEquals(e.OriginalSource, ExplorerIntegrationItem)) return;
+        var registered = false;
+        try { registered = Association.GetStatus().Registration == RegistrationKind.ThisExe; }
+        catch (Exception ex) when (IsRegistryError(ex)) { CrashLog.Write("Status pendaftaran \"Buka dengan\" tidak terbaca", ex); }
+        RegisterAssociationItem.Visibility = registered ? Visibility.Collapsed : Visibility.Visible;
+        UnregisterAssociationItem.Visibility = registered ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void RegisterAssociation_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var assoc = Association;
+            var result = assoc.Register();
+            if (result is RegisterResult.NeedsConfirmationOtherPortable or RegisterResult.NeedsConfirmationOtherExe)
+            {
+                var other = assoc.GetStatus().RegisteredExe;
+                var warning = result == RegisterResult.NeedsConfirmationOtherExe
+                    ? "\n\nBerkas itu bukan Makdon portable (mungkin hasil skrip pengembangan atau program lain); pendaftarannya akan ditimpa."
+                    : "";
+                var replace = ChoiceDialog.Show(this, AppName,
+                    $"\"Buka dengan\" sudah didaftarkan untuk Makdon di lokasi lain:\n{other}\n\nGanti dengan Makdon ini?\n{AppPaths.Current.ExePath}{warning}",
+                    cancelValue: false,
+                    new DialogChoice<bool>("Ganti", true),
+                    new DialogChoice<bool>("Batal", false, IsDefault: true));
+                if (!replace) return;
+                result = assoc.Register(replaceExisting: true);
+            }
+
+            var message = result switch
+            {
+                RegisterResult.Registered =>
+                    "Makdon didaftarkan ke daftar \"Buka dengan\" untuk berkas .md dan .markdown.\n\n" +
+                    "Klik kanan berkas .md > Buka dengan > Pilih aplikasi lain > Makdon, atau atur di Pengaturan > Aplikasi > Aplikasi bawaan.",
+                RegisterResult.AlreadyRegistered => "Makdon ini sudah terdaftar di \"Buka dengan\".",
+                RegisterResult.ExeNotFound =>
+                    $"Pendaftaran dibatalkan: {FileAssociation.AppExeName} tidak ditemukan di\n{AppPaths.Current.ExePath}\n\n" +
+                    $"Pastikan berkas exe tetap bernama {FileAssociation.AppExeName} (jangan diganti nama), lalu jalankan ulang dari folder Makdon.",
+                RegisterResult.BlockedByInstallation =>
+                    $"Makdon versi terpasang terdeteksi di:\n{assoc.FindInstallation()}\n\n" +
+                    "Gunakan versi terpasang itu untuk integrasi Explorer, atau hapus (uninstall) dulu bila ingin memakai versi portable ini.",
+                _ => "Pendaftaran tidak dilakukan.",
+            };
+            MessageBox.Show(this, message, AppName, MessageBoxButton.OK,
+                result == RegisterResult.BlockedByInstallation ? MessageBoxImage.Warning : MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (IsRegistryError(ex))
+        {
+            CrashLog.Write("Mendaftarkan \"Buka dengan\" gagal", ex);
+            ShowError("Pendaftaran \"Buka dengan\" gagal.", ex);
+        }
+    }
+
+    void UnregisterAssociation_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var message = Association.Unregister() == UnregisterResult.Removed
+                ? "Pendaftaran \"Buka dengan\" Makdon ini sudah dicabut."
+                : "Tidak ada pendaftaran yang menunjuk ke Makdon ini, jadi tidak ada yang dihapus.";
+            MessageBox.Show(this, message, AppName, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (IsRegistryError(ex))
+        {
+            CrashLog.Write("Mencabut pendaftaran \"Buka dengan\" gagal", ex);
+            ShowError("Pencabutan pendaftaran \"Buka dengan\" gagal.", ex);
+        }
+    }
+
+    void About_Click(object sender, RoutedEventArgs e)
+    {
+        var mode = AppPaths.Current.IsPortable ? "Portable" : "Terpasang";
+        var openReleases = ChoiceDialog.Show(this, "Tentang Makdon",
+            $"Makdon {AppInfo.Version}\nEditor dan pratinjau Markdown.\n\nMode: {mode}\nLisensi: {AppInfo.LicenseName}\n\n" +
+            $"Halaman rilis:\n{AppInfo.ReleasesUrl}\n\n" +
+            "Makdon tidak memeriksa pembaruan sendiri; unduh versi baru dari halaman rilis.",
+            cancelValue: false,
+            new DialogChoice<bool>("Buka Halaman Rilis", true),
+            new DialogChoice<bool>("Tutup", false, IsDefault: true));
+        if (!openReleases) return;
+
+        try { Process.Start(new ProcessStartInfo(AppInfo.ReleasesUrl) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException)
+        {
+            CrashLog.Write("Gagal membuka halaman rilis", ex);
+            ShowError("Halaman rilis tidak bisa dibuka di browser.", ex);
+        }
+    }
 
     // ---- Command handlers ----
 

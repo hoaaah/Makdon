@@ -52,8 +52,11 @@ public sealed class AppSettings
     [JsonIgnore]
     public AppThemeMode ParsedTheme => ThemeManager.Parse(Theme);
 
-    public static string DefaultPath { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Makdon", "settings.json");
+    /// <summary>
+    /// %APPDATA%\Makdon\settings.json (terpasang) atau &lt;folder exe&gt;\data\settings.json (portable). Bila folder portable
+    /// tidak bisa ditulisi, <see cref="Save"/> gagal (false) dan pengaturan hanya di memori; tidak pindah ke %APPDATA%.
+    /// </summary>
+    public static string DefaultPath => AppPaths.Current.SettingsPath;
 
     public static AppSettings Load(string? path = null)
     {

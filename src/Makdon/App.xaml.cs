@@ -19,7 +19,9 @@ public partial class App : Application
         // Path relatif pada argumen dihitung dari folder kerja proses ini; ubah ke mutlak sebelum diteruskan ke instance lain.
         var files = e.Args.Select(ToFullPath).ToList();
 
-        singleInstance = SingleInstance.Create();
+        // Terpasang: mutex bernama tetap untuk installer (portable tidak membuatnya). Portable: scope per folder exe.
+        InstallerMutex.Acquire(AppPaths.Current);
+        singleInstance = SingleInstance.Create(AppPaths.Current.SingleInstanceScope);
         if (!singleInstance.IsPrimary)
         {
             // Sudah ada Makdon yang berjalan: teruskan file (atau sekadar minta jendelanya aktif) lalu keluar.

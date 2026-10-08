@@ -132,6 +132,13 @@
                 <MenuItem Header="Pra_tinjau Cetak..." Command="{x:Static local:AppCommands.PrintPreview}" />
                 <MenuItem Header="_Cetak..." Command="ApplicationCommands.Print" />
                 <Separator />
+                <!-- Hanya tampil di mode portable (diatur di code-behind). -->
+                <MenuItem x:Name="ExplorerIntegrationItem" Header="Integrasi E_xplorer" Visibility="Collapsed"
+                          SubmenuOpened="ExplorerIntegration_SubmenuOpened">
+                    <MenuItem x:Name="RegisterAssociationItem" Header="_Daftarkan ke &quot;Buka dengan&quot;" Click="RegisterAssociation_Click" />
+                    <MenuItem x:Name="UnregisterAssociationItem" Header="_Cabut pendaftaran" Click="UnregisterAssociation_Click" />
+                </MenuItem>
+                <Separator x:Name="ExplorerIntegrationSeparator" Visibility="Collapsed" />
                 <MenuItem Header="_Tutup Tab" Command="ApplicationCommands.Close" InputGestureText="Ctrl+W" />
                 <MenuItem Header="_Keluar" Click="Exit_Click" InputGestureText="Alt+F4" />
             </MenuItem>
@@ -176,6 +183,9 @@
                 <MenuItem x:Name="LoadRemoteImagesItem" Header="_Muat gambar remote" IsCheckable="True"
                           Click="LoadRemoteImages_Click"
                           ToolTip="Tampilkan gambar http(s) di pratinjau dan cetak. Mati (bawaan): gambar remote diganti teks agar tidak melacak Anda." />
+            </MenuItem>
+            <MenuItem Header="Ban_tuan">
+                <MenuItem Header="_Tentang Makdon..." Click="About_Click" />
             </MenuItem>
         </Menu>
 
