@@ -1,5 +1,7 @@
 # Makdon
 
+[English](README.md) | **Bahasa Indonesia**
+
 Editor dan pratinjau Markdown untuk Windows (WPF, .NET 10). Buka file `.md`, edit di kiri, lihat hasilnya langsung di kanan.
 
 ## Fitur
@@ -200,7 +202,7 @@ dotnet publish src/Makdon -p:PublishProfile=win-x64
 
 Hasil: `src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe`. Untuk membangun installer dan zip portable sekaligus
 (butuh Inno Setup 6), jalankan `scripts\build-release.ps1`; keluarannya di `artifacts\<versi>\`. Lihat
-[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#9-membuat-rilis).
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#9-making-a-release).
 
 ## Asosiasi file untuk pengembangan (.md)
 
@@ -218,7 +220,7 @@ Buka dengan > Pilih aplikasi lain (centang "Selalu gunakan"), atau di Pengaturan
 `-SetDefault` menulis nilai bawaan ekstensi di HKCU dan mencadangkan nilai lama ke
 `HKCU\Software\Makdon\PreviousDefault`; skrip unregister memulihkannya. `-Extensions` hanya menerima huruf kecil
 dan angka (mis. `.md`). Skrip mengikuti tabel registri yang sama dengan installer (lihat
-[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md#41-spesifikasi-registri-satu-sumber-kebenaran)).
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md#41-registry-specification-single-source-of-truth)).
 
 ## Lisensi
 
