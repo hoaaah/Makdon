@@ -1,11 +1,17 @@
-# Rilis Makdon: dipicu tag v*. Rancangan: docs/DISTRIBUTION.md bagian 8.
+# Rilis Makdon: dipicu push ke branch `build`. Versi diambil dari <Version> di Makdon.csproj; tag v<versi> dibuat
+# otomatis pada commit yang dibangun. Rancangan: docs/DISTRIBUTION.md bagian 8.
 # Langkah build/test/publish/installer/zip/checksum ada di scripts/build-release.ps1 (bisa dijalankan lokal).
 name: release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - build
+
+# Dua push beruntun ke `build` tidak boleh berebut tag/rilis yang sama; yang kedua menunggu, tidak membatalkan yang berjalan.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -24,17 +30,25 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Tag harus sama dengan Version di Makdon.csproj
+      - name: Versi dari Makdon.csproj; tolak bila sudah pernah dirilis
         shell: pwsh
         env:
-          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $xml = [xml](Get-Content src/Makdon/Makdon.csproj -Raw)
           $version = ($xml.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
           if (-not $version) { throw '<Version> tidak ditemukan di Makdon.csproj.' }
-          $tag = $env:TAG
-          if ($tag -ne "v$version") { throw "Tag '$tag' tidak sama dengan v$version (Version di Makdon.csproj)." }
+          # Versi masuk ke nama tag dan berkas; batasi ke SemVer agar tidak bisa menyisipkan apa pun.
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Version '$version' bukan SemVer yang sah." }
+          $tag = "v$version"
+          # Diperiksa sebelum build (yang lama) supaya push tanpa menaikkan versi langsung gagal dengan pesan jelas.
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw "Tag $tag sudah ada: naikkan <Version> di src/Makdon/Makdon.csproj sebelum push ke branch build." }
+          $existing = gh release view $tag --json isDraft --jq '.isDraft' 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existing -ne 'true') { throw "Rilis $tag sudah ada: naikkan <Version> di src/Makdon/Makdon.csproj." }
+          $global:LASTEXITCODE = 0
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
@@ -64,7 +78,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
           $dir = "artifacts/$env:VERSION"
           $setup = "$dir/Makdon-$env:VERSION-setup-x64.exe"
@@ -82,8 +96,15 @@ jobs:
 
           PowerShell: ``(Get-FileHash .\Makdon-$env:VERSION-setup-x64.exe -Algorithm SHA256).Hash``
           "@
-          # Draft dulu supaya aset lengkap sebelum rilis dikunci (immutable releases).
-          gh release create "$env:TAG" --draft --title "Makdon $env:VERSION" --notes "$notes" --verify-tag
+          # Draft sisa run yang gagal belum publik dan belum punya tag; aman dibuang lalu dibuat ulang.
+          gh release view "$env:TAG" --json isDraft --jq '.isDraft' 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete "$env:TAG" --yes
+            if ($LASTEXITCODE -ne 0) { throw 'Gagal menghapus draft rilis lama.' }
+          }
+          # Draft dulu supaya aset lengkap sebelum rilis dikunci (immutable releases). Tag dibuat pada commit yang dibangun
+          # (--target) saat rilis dipublikasikan.
+          gh release create "$env:TAG" --draft --target "$env:TARGET_SHA" --title "Makdon $env:VERSION" --notes "$notes"
           if ($LASTEXITCODE -ne 0) { throw 'Gagal membuat draft rilis.' }
           gh release upload "$env:TAG" $setup $zip $sums
           if ($LASTEXITCODE -ne 0) { throw 'Gagal mengunggah aset.' }

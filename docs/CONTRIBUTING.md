@@ -9,7 +9,7 @@ merangkum dan menambah langkah praktis. Gambaran arsitektur: [ARCHITECTURE.md](A
 
 - Windows (WPF) dan **.NET 10 SDK** (README: "Butuh .NET 10 SDK"). Tidak ada dependensi alat lain untuk build/test; paket NuGet dipulihkan otomatis
   oleh `dotnet build`. Proyek memakai `net10.0-windows` (`src/Makdon/Makdon.csproj:5`), jadi tidak bisa dibangun di Linux/macOS.
-- CI hanya untuk rilis (`.github/workflows/release.yml`, dipicu tag `v*`); tidak ada CI per PR. Tidak ada analyzer atau `.editorconfig`;
+- CI hanya untuk rilis (`.github/workflows/release.yml`, dipicu push ke branch `build`); tidak ada CI per PR. Tidak ada analyzer atau `.editorconfig`;
   penjaga kualitas saat ini adalah aturan "0 warning" dan test (lihat bagian 6).
 
 ```powershell
@@ -31,7 +31,7 @@ CLAUDE.md, README.md, CHANGELOG.md
 docs/                       dokumentasi pengembangan (indeks: docs/README.md)
 scripts/                    register/unregister-file-association.ps1 (HKCU), build-release.ps1, generate-icon.ps1
 installer/                  Makdon.iss (Inno Setup 6), Languages/Indonesian.isl
-.github/workflows/          release.yml (rilis pada tag v*)
+.github/workflows/          release.yml (rilis pada push ke branch build)
 LICENSE, THIRD-PARTY-NOTICES.txt   lisensi MIT dan pemberitahuan pihak ketiga (ikut dalam setiap rilis)
 .claude/agents/             sub-agent proyek (kuli, tyas, kurang-kerjaan, pak-bos)
 src/Makdon/                 aplikasi WPF
@@ -313,7 +313,8 @@ termasuk kegagalan.
 
 ## 9. Membuat rilis
 
-Rilis dipicu tag `v<versi>`; rancangan lengkapnya di [DISTRIBUTION.md](DISTRIBUTION.md) §8. Gagal bila tag tidak sama dengan `<Version>`.
+Rilis dipicu push ke branch `build`; rancangan lengkapnya di [DISTRIBUTION.md](DISTRIBUTION.md) §8. Versi diambil dari `<Version>`, tag `v<versi>`
+dibuat otomatis, dan run gagal bila versi itu sudah pernah dirilis.
 
 1. Naikkan `<Version>` di `src/Makdon/Makdon.csproj` (satu sumber; skrip dan CI membacanya) dan pindahkan entri `[Unreleased]` di
    [../CHANGELOG.md](../CHANGELOG.md) ke versi dan tanggal baru.
@@ -324,6 +325,6 @@ Rilis dipicu tag `v<versi>`; rancangan lengkapnya di [DISTRIBUTION.md](DISTRIBUT
    - `-VerifyInstallerContents` memasang installer ke folder sementara lalu mencopotnya, dan menulis HKCU sementara. Skrip menolaknya di luar CI (`GITHUB_ACTIONS=true`) kecuali dengan `-Force`, dan menolak bila kunci uninstall Makdon sudah ada (`scripts/build-release.ps1:174-188`).
 3. Keluaran di `artifacts\<versi>\`: `Makdon-<versi>-setup-x64.exe`, `Makdon-<versi>-portable-x64.zip`, `SHA256SUMS.txt`.
 4. Uji installer dan zip dengan checklist "Distribusi" di [TESTING.md](TESTING.md#checklist-uji-manual-sebelum-rilis).
-5. Commit perubahan versi dan CHANGELOG (hanya bila diminta), buat tag `v<versi>`, lalu push tag. Workflow `release.yml` membuat
-   draft rilis, mengunggah tiga aset, dan mempublikasikannya. Rilis yang sudah terbit tidak boleh diganti (immutable releases, **belum diverifikasi**
+5. Commit perubahan versi dan CHANGELOG (hanya bila diminta), lalu push commit itu ke branch `build` (mis. `git push origin main:build`). Workflow
+   `release.yml` membuat tag `v<versi>` pada commit tersebut, membuat draft rilis, mengunggah tiga aset, dan mempublikasikannya. Rilis yang sudah terbit tidak boleh diganti (immutable releases, **belum diverifikasi**
    di repo); bila salah, terbitkan versi baru.

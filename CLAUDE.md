@@ -35,7 +35,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1   # build+tes
   `[Collection("Wpf")]`; `Support/TempDir` untuk file sementara; `Support/FakeRegistryStore` untuk registri palsu.
 - `scripts/` - registrasi asosiasi file (HKCU, jangan dijalankan tanpa `-WhatIf` dulu), `build-release.ps1` (pembangun rilis lokal, sama dengan CI), dan pembuat ikon.
 - `installer/` - `Makdon.iss` (Inno Setup 6) dan `Languages/Indonesian.isl` (terjemahan tidak resmi).
-- `.github/workflows/release.yml` - rilis otomatis pada tag `v*`.
+- `.github/workflows/release.yml` - rilis otomatis pada push ke branch `build` (versi dari `<Version>`, tag `v<versi>` dibuat workflow).
 - `LICENSE` (MIT), `THIRD-PARTY-NOTICES.txt` - ikut dalam setiap rilis.
 
 ## Konvensi

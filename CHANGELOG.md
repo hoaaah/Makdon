@@ -22,7 +22,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan p
   terpasang ada; meminta konfirmasi sebelum mengganti pendaftaran exe lain; menawarkan memperbarui path yang basi saat startup.
 - **Bantuan > Tentang Makdon**: versi, mode, lisensi MIT, dan tautan halaman rilis. Makdon tidak memeriksa pembaruan sendiri.
 - **Rilis**: profil publish `win-x64` (self-contained, folder), `scripts/build-release.ps1` (build 0 warning, test, publish, installer,
-  zip, `SHA256SUMS.txt`), dan `.github/workflows/release.yml` (dipicu tag `v*`, attestasi asal-usul build, draft lalu publikasi).
+  zip, `SHA256SUMS.txt`), dan `.github/workflows/release.yml` (dipicu push ke branch `build`, tag `v<versi>` dibuat otomatis, attestasi asal-usul build, draft lalu publikasi).
 - **LICENSE** (MIT) dan **THIRD-PARTY-NOTICES.txt**; keduanya ikut dalam setiap rilis.
 
 - **Pratinjau Cetak**- **Pratinjau Cetak** (Ctrl+Shift+P, Berkas > Pratinjau Cetak..., tombol toolbar; `AppCommands.PrintPreview`): jendela modal berisi halaman cetak yang

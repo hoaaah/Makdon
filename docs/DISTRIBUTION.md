@@ -260,16 +260,18 @@ Penandatanganan dipindahkan ke roadmap (§10).
 - Update: unduh lalu jalankan installer baru (upgrade di tempat), atau timpa folder portable (folder `data\` dan `Makdon.portable` dipertahankan;
   dijelaskan di README).
 - Aplikasi **tidak** menghubungi internet. Dialog Tentang menampilkan versi dan tautan halaman rilis (`MainWindow.xaml.cs:621-`).
-- Penomoran SemVer; satu sumber di `Makdon.csproj` (`<Version>`, `Makdon.csproj:12`); tag git `v<versi>`.
+- Penomoran SemVer; satu sumber di `Makdon.csproj` (`<Version>`, `Makdon.csproj:12`); tag git `v<versi>` dibuat otomatis oleh workflow rilis (§8).
 - **Kebijakan runtime:** karena runtime .NET ikut dikemas, pengguna menjalankan runtime yang dibundel sampai mereka memperbarui Makdon.
   Rilis ulang (patch) dibuat bila .NET mengeluarkan patch keamanan yang relevan untuk WPF/runtime.
 
 ## 8. Pipeline rilis (GitHub Actions)
 
-Workflow `.github/workflows/release.yml`, dipicu tag `v*`, runner `windows-latest`, izin `contents: write`, `id-token: write`,
+Workflow `.github/workflows/release.yml`, dipicu **push ke branch `build`**, runner `windows-latest`, izin `contents: write`, `id-token: write`,
 `attestations: write`. Langkah yang sama bisa dijalankan lokal lewat `scripts/build-release.ps1` (lihat [CONTRIBUTING.md](CONTRIBUTING.md#9-membuat-rilis)).
 
-1. Gagal bila tag ≠ `v<Version>` di `Makdon.csproj` (langkah "Tag harus sama dengan Version").
+1. Versi dibaca dari `<Version>` di `Makdon.csproj` (harus SemVer). Gagal sebelum build bila tag `v<Version>` atau rilis terbit dengan nama itu sudah ada,
+   jadi setiap push ke `build` yang ingin merilis harus menaikkan `<Version>`. Draft sisa run gagal dibuang lalu dibuat ulang. Run dibatasi satu per
+   waktu (`concurrency: release`, tanpa membatalkan yang berjalan).
 2. `dotnet build` (0 warning) + `dotnet test` (semua hijau). Test WPF (`WpfHost`, STA) perlu dicoba di runner; test cetak sudah tanpa printer.
    **Belum diverifikasi**: test WPF di runner `windows-latest`.
 3. `dotnet publish` dengan profil `win-x64`.
@@ -277,7 +279,9 @@ Workflow `.github/workflows/release.yml`, dipicu tag `v*`, runner `windows-lates
    Paket Chocolatey `innosetup` versi 6.7.1 terverifikasi ada. Workflow memasangnya sendiri, jadi image runner tidak menentukan. Installer Inno Setup itu sendiri tidak diverifikasi checksum-nya (**belum diverifikasi**).
 5. Zip portable: folder publish + `Makdon.portable` + lisensi. Folder `data\` tidak disertakan (dibuat aplikasi).
 6. Pemeriksaan otomatis: `Makdon.portable` **tidak** boleh ada di isi installer (`build-release.ps1 -VerifyInstallerContents`: pasang sementara lalu copot, dan menulis HKCU sementara). Skrip hanya menjalankannya di CI (`GITHUB_ACTIONS=true`) atau dengan `-Force`, dan menolak bila kunci uninstall Makdon (`_is1`) sudah ada di HKCU atau HKLM.
-7. `SHA256SUMS.txt` → attestation → **draft release** → unggah aset → publikasikan (immutable).
+7. `SHA256SUMS.txt` → attestation → **draft release** (`--target` = commit yang dibangun) → unggah aset → publikasikan (immutable). Tag
+   `v<versi>` terbentuk pada commit itu saat rilis dipublikasikan.
+8. Siapa pun yang bisa push ke `build` bisa menerbitkan rilis: lindungi branch `build` (branch protection/ruleset) di GitHub (**belum dikonfigurasi**).
 
 Keluaran lokal ke `artifacts/<versi>/` (di-`.gitignore`).
 
