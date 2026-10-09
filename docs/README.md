@@ -2,7 +2,7 @@
 
 **Purpose:** index of the development documentation. **Audience:** developers, reviewers, and AI agents working in this repo.
 User documentation (features, shortcuts, short build instructions) is in [../README.md](../README.md); project working rules are in
-[../CLAUDE.md](../CLAUDE.md); release history is in [../CHANGELOG.md](../CHANGELOG.md).
+[../AGENTS.md](../AGENTS.md); release history is in [../CHANGELOG.md](../CHANGELOG.md).
 
 | Document | Contents | Read when |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ User documentation (features, shortcuts, short build instructions) is in [../REA
 
 - Code references are written as `path:line`, relative to the repo root; line numbers match the code when the document was written and may shift. Type and method names are the stable reference; search for them with `grep`.
 - Anything that cannot be proven from code, tests, or the README is marked "not verified" or "assumption".
-- Documentation is in English (`README.md`, `CLAUDE.md`, `docs/`); UI text, application messages, and code comments remain in Indonesian. `README.id.md` is the Indonesian version of `README.md`, and both must be updated together.
+- Documentation is in English (`README.md`, `AGENTS.md`, `docs/`); UI text, application messages, and code comments remain in Indonesian. `README.id.md` is the Indonesian version of `README.md`, and both must be updated together.
 - Update these documents together with the code changes that affect them (see the PR checklist in [CONTRIBUTING.md](CONTRIBUTING.md#6-pr-checklist)).
 
 ## Document/code mismatches: already aligned (2026-10-07)
@@ -27,7 +27,7 @@ The mismatches recorded when this documentation was written have been fixed; non
 
 - README (Data locations): `crash.log` is now described as "the whole file is deleted if larger than 512 KB, then a new entry is written" (`src/Makdon/CrashLog.cs:37`).
 - README (Known limitations): "over 1 MB" was replaced by tiered character thresholds (100k: background parse; 200k: longer render delay; 1 million: longer delay and less frequent statistics) - `src/Makdon/DocumentView.xaml.cs:22-29`.
-- CLAUDE.md: the test rule is now "must not touch/write `%APPDATA%`, `%LOCALAPPDATA%`, or the registry (reading HKCU Personalize for the
+- AGENTS.md: the test rule is now "must not touch/write `%APPDATA%`, `%LOCALAPPDATA%`, or the registry (reading HKCU Personalize for the
   theme is allowed)". Four tests read that value through `ThemeManager.SystemUsesLightTheme()` (one test directly, three `ThemeManagerApplyTests`
   tests through `Apply`); none writes. See [CONTRIBUTING.md](CONTRIBUTING.md#42-rules).
 - `Makdon.csproj` `<Version>` changed from `1.0.0` to `0.1.0` to match the CHANGELOG.
@@ -53,7 +53,7 @@ Inno Setup installer, `scripts/build-release.ps1`, and `.github/workflows/releas
   `InstallerMutex`, `RegistryStore`, `FileAssociation`; startup flow and portable scope), DESIGN-DECISIONS (ADR-27 to ADR-33),
   SECURITY (2.13 installation/portable/registry; R14-R17; R12), TESTING (test map for the three new files, `TestApp` and `FakeRegistryStore`,
   distribution and Print Preview checklists on the publish result), CONTRIBUTING (.NET 10 SDK, rules 10-11, prohibitions, section 9 making a release),
-  README and CLAUDE.md at the root, and CHANGELOG (Unreleased entry).
+  README and AGENTS.md at the root, and CHANGELOG (Unreleased entry).
 - `path:line` references that shifted due to changes in `MainWindow.xaml(.cs)`, `App.xaml.cs`, `AppSettings.cs`, `CrashLog.cs`,
   `Makdon.csproj`, and `WpfHost.cs` were recalculated from the diff against HEAD with a script, and references pointing to changed lines
   were checked one by one.

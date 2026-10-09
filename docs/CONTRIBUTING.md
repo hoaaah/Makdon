@@ -1,7 +1,7 @@
 # Contribution Guide
 
 **Purpose:** how to set up the environment, build/test/publish Makdon, code conventions, how to write tests, how to add common things (themes, commands, view modes, extensions, toolbar formats), the PR checklist, and the project prohibitions.
-**Audience:** new contributors and AI agents that change code. The official project rules are in [../CLAUDE.md](../CLAUDE.md); this document summarizes them and adds practical steps. Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md). Testing: [TESTING.md](TESTING.md).
+**Audience:** new contributors and AI agents that change code. The official project rules are in [../AGENTS.md](../AGENTS.md); this document summarizes them and adds practical steps. Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md). Testing: [TESTING.md](TESTING.md).
 
 ## 1. Setup
 
@@ -22,7 +22,7 @@ The `<Version>` property is currently `0.1.0` (`Makdon.csproj:12`), the same as 
 
 ```text
 Makdon.sln
-CLAUDE.md, README.md, CHANGELOG.md
+AGENTS.md, README.md, CHANGELOG.md
 docs/                       dokumentasi pengembangan (indeks: docs/README.md)
 scripts/                    register/unregister-file-association.ps1 (HKCU), build-release.ps1, generate-icon.ps1
 installer/                  Makdon.iss (Inno Setup 6), Languages/Indonesian.isl
@@ -53,9 +53,9 @@ src/Makdon.Tests/           xUnit
 
 ## 3. Code and language conventions
 
-From CLAUDE.md, supplemented by the patterns consistently visible in the code:
+From AGENTS.md, supplemented by the patterns consistently visible in the code:
 
-- **Language:** UI text, error messages, and code comments are in **Indonesian**; identifier names are in **English**. Documentation (`README.md`, `CLAUDE.md`, `docs/`) is in **English**; `README.id.md` is the Indonesian version of `README.md`, and both must be updated together.
+- **Language:** UI text, error messages, and code comments are in **Indonesian**; identifier names are in **English**. Documentation (`README.md`, `AGENTS.md`, `docs/`) is in **English**; `README.id.md` is the Indonesian version of `README.md`, and both must be updated together.
 - **Nullable and ImplicitUsings are enabled**; the build must not produce warnings (`System.IO` is added via `<Using>` in the csproj).
 - **Comments explain the reason (why)**, not repeat the code. Example style: the comments above non-obvious decisions such as `DocumentTab.cs:33-36` and `TextFileIO.cs:145`.
 - **Do not add features beyond the request.** Findings outside the task are reported, not fixed along the way.
@@ -229,12 +229,12 @@ The current mode is `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Pl
 - [ ] Print/Print Preview: no local paths or error documents on paper; print tests without a physical printer or real dialog (rules 8-9 in 4.2).
 - [ ] UI text/messages/comments in Indonesian, identifiers in English; comments explain *why*.
 - [ ] No features beyond the request; other findings are reported separately.
-- [ ] Documentation updated when behavior changes: [../README.md](../README.md) (features, shortcuts, limitations) and `README.id.md` (updated together with `README.md`), [../CLAUDE.md](../CLAUDE.md)
+- [ ] Documentation updated when behavior changes: [../README.md](../README.md) (features, shortcuts, limitations) and `README.id.md` (updated together with `README.md`), [../AGENTS.md](../AGENTS.md)
   (when rules/structure change), documents in `docs/`, and [../CHANGELOG.md](../CHANGELOG.md).
-- [ ] Identity changes (`AppId`, mutex name `Makdon.AppMutex`, registry table DISTRIBUTION 4.1, XPS switch) are changed together everywhere listed in CLAUDE.md. Changes to the installer or registry scripts are tested with `-WhatIf` or in a VM.
+- [ ] Identity changes (`AppId`, mutex name `Makdon.AppMutex`, registry table DISTRIBUTION 4.1, XPS switch) are changed together everywhere listed in AGENTS.md. Changes to the installer or registry scripts are tested with `-WhatIf` or in a VM.
 - [ ] No automatic commit/push; commit only when asked.
 
-## 7. Prohibitions (from CLAUDE.md)
+## 7. Prohibitions (from AGENTS.md)
 
 - Do not write document files directly; everything goes through `TextFileIO.Write` (atomic, keeps encoding/BOM).
 - Do not merge `MarkdownSupport.Pipeline` (preview) with `ExportPipeline` + `SanitizeForExport` (HTML export must escape raw HTML and filter URLs).

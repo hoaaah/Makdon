@@ -112,7 +112,7 @@ Test line numbers in this table refer to `SingleInstanceServerTests.cs`, unless 
 
 | Threat | Control | Code location | Test |
 | --- | --- | --- | --- |
-| A script damages the system registry or requires admin | Only `Registry.CurrentUser` (HKCU); `SupportsShouldProcess` (`-WhatIf` prints without writing) | `scripts/register-file-association.ps1:37, 77, 81`; `unregister-file-association.ps1:20, 42, 102` | - (CLAUDE.md forbids running real registry scripts in tests) |
+| A script damages the system registry or requires admin | Only `Registry.CurrentUser` (HKCU); `SupportsShouldProcess` (`-WhatIf` prints without writing) | `scripts/register-file-association.ps1:37, 77, 81`; `unregister-file-association.ps1:20, 42, 102` | - (AGENTS.md forbids running real registry scripts in tests) |
 | Subkey name injection through `-Extensions` | `-Extensions` is normalized to lowercase, then validated with `'^\.[a-z0-9]+$'` (`-cnotmatch`) | `register-file-association.ps1:68-70`, `unregister-file-association.ps1:36-38` | - |
 | The user's existing default value is lost | `-SetDefault` backs up to `HKCU\Software\Makdon\PreviousDefault`; unregister restores it and only touches a value that points exactly to the Makdon ProgID; `UserChoice` is not touched | `register-file-association.ps1:102-120`, `unregister-file-association.ps1:57-114` | - |
 | Execution: `powershell -ExecutionPolicy Bypass` in the README | Only for the repo's scripts; inspect the script contents and run `-WhatIf` first | README, "Open with" (file association) section | - |

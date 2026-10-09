@@ -184,6 +184,12 @@ saat keluar menyimpan sesinya seperti instance tanpa argumen.
 Dokumentasi pengembangan (arsitektur, keputusan desain, kontribusi, keamanan, pengujian, distribusi) ada di [docs/](docs/README.md).
 Riwayat perubahan: [CHANGELOG.md](CHANGELOG.md).
 
+## Tentang proyek ini
+
+Makdon adalah proyek hasil **vibecoding**: dibuat bersama asisten coding AI ([Claude Code](https://claude.com/claude-code)), dengan manusia yang mengarahkan dan meninjau hasilnya.
+
+Kalau Anda ingin ikut mengembangkan atau memodifikasinya lewat fork, repositori ini menyediakan [AGENTS.md](AGENTS.md) berisi aturan proyek (struktur, konvensi, batasan keamanan, dan perintah build/test) untuk agen coding AI. Claude Code membacanya lewat [CLAUDE.md](CLAUDE.md); agen lain yang mendukung `AGENTS.md` dapat membacanya langsung. Kontributor manusia dapat menemukan aturan yang sama dalam ringkasan di [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
 ## Build, test, publish
 
 Butuh **.NET 10 SDK** (target `net10.0-windows`).

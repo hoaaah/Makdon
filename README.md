@@ -134,6 +134,12 @@ Session rule: an instance opened with a file argument (e.g., double-clicking a `
 Development documentation (architecture, design decisions, contributing, security, testing, distribution) is in [docs/](docs/README.md).
 Change history: [CHANGELOG.md](CHANGELOG.md).
 
+## About this project
+
+Makdon is a **vibe-coded** project: it was built together with an AI coding assistant ([Claude Code](https://claude.com/claude-code)), with a human steering the direction and reviewing the results.
+
+If you want to develop or modify it through a fork, the repository ships an [AGENTS.md](AGENTS.md) with the project rules (structure, conventions, security constraints, and the build/test commands) for AI coding agents. Claude Code reads it through [CLAUDE.md](CLAUDE.md); other agents that support `AGENTS.md` can read it directly. Human contributors will find the same rules summarized in [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
 ## Build, test, publish
 
 Requires the **.NET 10 SDK** (target `net10.0-windows`).
