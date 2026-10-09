@@ -1,606 +1,284 @@
-# Catatan Keputusan Desain (ADR ringkas)
+# Design Decision Log (concise ADRs)
 
-**Tujuan:** mencatat keputusan desain yang tampak di kode Makdon beserta konteks, keputusan, dan konsekuensinya, supaya
-perubahan di masa depan tidak melanggar alasan aslinya tanpa sadar.
-**Pembaca:** pengembang dan reviewer.
+**Purpose:** record the design decisions visible in the Makdon code, together with their context, decision, and consequences, so that future changes do not unknowingly violate the original reasons.
+**Audience:** developers and reviewers.
 
-**Aturan dokumen ini:** alasan hanya diambil dari komentar kode, nama test, README, dan CLAUDE.md. Bila motivasi tidak tertulis di
-mana pun, ditulis "tidak tercatat" atau "dugaan, belum diverifikasi". Riwayat git pendek (`git log`), jadi sejarah keputusan tidak banyak bisa ditelusuri dari sana (`b2a35be` menambah dokumentasi dan
-menutup celah tautan UNC; `6d1d539` menambah Pratinjau Cetak, ADR-19 sampai ADR-26; ADR-27 sampai ADR-33 adalah fitur distribusi yang belum di-commit saat ditulis). Arsitektur: [ARCHITECTURE.md](ARCHITECTURE.md). Keamanan: [SECURITY.md](SECURITY.md).
+**Rules for this document:** rationale is taken only from code comments, test names, README, and CLAUDE.md. When a motivation is not written anywhere, it is marked "not recorded" or "unverified assumption". The git history is short (`git log`), so the history of decisions cannot be traced much from it (`b2a35be` added documentation and closed the UNC link gap; `6d1d539` added Print Preview, ADR-19 to ADR-26; ADR-27 to ADR-33 are distribution features that were not yet committed when this was written). Architecture: [ARCHITECTURE.md](ARCHITECTURE.md). Security: [SECURITY.md](SECURITY.md).
 
-Format tiap catatan: **Konteks** - **Keputusan** - **Konsekuensi** - **Bukti** (kode `path:baris`, test).
-Status semua catatan: berlaku (tercermin di kode saat ini).
+Format of each note: **Context** - **Decision** - **Consequences** - **Evidence** (code `path:line`, tests).
+Status of all notes: in effect (reflected in the current code).
 
-| # | Keputusan |
+| # | Decision |
 | --- | --- |
-| [01](#adr-01-simpan-atomik-dengan-fallback-writeinplace) | Simpan atomik + fallback `WriteInPlace` |
-| [02](#adr-02-deteksi-encoding-dan-penanda-lossy) | Deteksi encoding dan penanda lossy |
-| [03](#adr-03-hash-isi--filestamp-untuk-perubahan-eksternal) | Hash isi + `FileStamp` untuk perubahan eksternal |
-| [04](#adr-04-muat-ulang-adalah-satu-langkah-undo) | Muat ulang = satu langkah Undo |
-| [05](#adr-05-dialog-konflik-berlabel-dan-diserialisasi) | Dialog konflik berlabel dan diserialisasi |
-| [06](#adr-06-pipeline-ekspor-terpisah-allowlist-url-dan-anggaran-data-uri) | Pipeline ekspor terpisah, allowlist URL, anggaran data URI |
-| [07](#adr-07-pemblokiran-gambar-remoteunc-di-pratinjau-dan-cetak) | Pemblokiran gambar remote/UNC di pratinjau |
-| [08](#adr-08-single-instance-dengan-mutex-dan-named-pipe-per-sesi) | Single-instance Mutex + pipe per sesi (+ scope portable, ADR-29) |
-| [09](#adr-09-aturan-sesi-preservestoredsession) | Aturan sesi `preserveStoredSession` |
-| [10](#adr-10-normalizelineendings-dan-batas-waktu-regex) | `NormalizeLineEndings` + batas waktu regex |
-| [11](#adr-11-crashlog-dan-isrecoverable) | `CrashLog` dan `IsRecoverable` |
-| [12](#adr-12-tema-lewat-resourcedictionary) | Tema lewat `ResourceDictionary` |
-| [13](#adr-13-nama-appthememode) | Nama `AppThemeMode` |
-| [14](#adr-14-render-pratinjau-debounce-parse-latar-dan-generation-check) | Render pratinjau: debounce, parse latar, generation check |
-| [15](#adr-15-pengaturan-tidak-pernah-melempar-dan-digabung-saat-simpan) | Pengaturan tidak pernah melempar, digabung saat simpan |
-| [16](#adr-16-pembukaan-dokumen-hanya-lewat-openfile-dengan-batas-ukuran) | Pembukaan dokumen hanya lewat `OpenFile`, batas ukuran |
-| [17](#adr-17-klik-tautan-di-pratinjau) | Klik tautan di pratinjau |
-| [18](#adr-18-skrip-asosiasi-file-hanya-hkcu) | Skrip asosiasi file hanya HKCU (alat pengembangan; aplikasi memakai ADR-30) |
-| [19](#adr-19-pratinjau-cetak-lewat-paket-xps-di-memori) | Pratinjau Cetak lewat paket XPS di memori |
-| [20](#adr-20-snapshot-saat-pratinjau-dibuka-dan-parse-yang-dipakai-bersama) | Snapshot saat pratinjau dibuka dan parse yang dipakai bersama |
-| [21](#adr-21-kaki-halaman-di-dalam-margin-bawah) | Kaki halaman di dalam margin bawah |
-| [22](#adr-22-pratinjau-punya-pengaturan-kertas-sendiri-dan-konfirmasi-bila-dialog-cetak-berbeda) | Pratinjau punya pengaturan kertas sendiri + konfirmasi bila dialog Cetak berbeda |
-| [23](#adr-23-dokumen-cetak-selalu-bertema-terang) | Dokumen cetak selalu bertema Terang |
-| [24](#adr-24-dokumen-galat-tidak-pernah-dicetak) | Dokumen galat tidak pernah dicetak |
-| [25](#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle) | Galat pratinjau dibungkus `Guard`, paket XPS dibersihkan setelah idle |
-| [26](#adr-26-seam-khusus-test-pada-kode-cetak) | Seam khusus test pada kode cetak |
-| [27](#adr-27-folder-self-contained-bukan-single-file-dan-installer-per-pengguna) | Folder self-contained (bukan single-file); installer per pengguna |
-| [28](#adr-28-mode-portable-lewat-penanda-makdonportable-data-di-data) | Mode portable lewat penanda `Makdon.portable`; data di `data\` |
-| [29](#adr-29-scope-single-instance-per-folder-exe-untuk-portable) | Scope single-instance per folder exe untuk portable |
-| [30](#adr-30-pendaftaran-buka-dengan-portable-di-hkcu-lewat-fileassociation-dan-iregistrystore-tolak-bila-terpasang) | "Buka dengan" portable lewat `FileAssociation` + `IRegistryStore`; tolak bila terpasang |
-| [31](#adr-31-mutex-installer-bernama-tetap-makdonappmutex-bukan-restart-manager) | Mutex installer bernama tetap (`Makdon.AppMutex`), bukan Restart Manager |
-| [32](#adr-32-net-10-dan-switch-xps-di-runtimeconfig) | .NET 10 dan switch XPS di runtimeconfig |
-| [33](#adr-33-wpfhost-memakai-testapp-tanpa-onstartup) | `WpfHost` memakai `TestApp` tanpa `OnStartup` |
+| [01](#adr-01-atomic-save-with-fallback-writeinplace) | Atomic save + `WriteInPlace` fallback |
+| [02](#adr-02-encoding-detection-and-lossy-marker) | Encoding detection and lossy marker |
+| [03](#adr-03-content-hash-and-filestamp-for-external-changes) | Content hash + `FileStamp` for external changes |
+| [04](#adr-04-reload-is-a-single-undo-step) | Reload = a single Undo step |
+| [05](#adr-05-labeled-and-serialized-conflict-dialog) | Labeled and serialized conflict dialog |
+| [06](#adr-06-separate-export-pipeline-url-allowlist-and-data-uri-budget) | Separate export pipeline, URL allowlist, data URI budget |
+| [07](#adr-07-blocking-remoteunc-images-in-preview-and-print) | Blocking remote/UNC images in preview |
+| [08](#adr-08-single-instance-mutex-and-per-session-named-pipe-plus-portable-scope-adr-29) | Single-instance Mutex + per-session pipe (plus portable scope, ADR-29) |
+| [09](#adr-09-preservestoredsession-session-rule) | `preserveStoredSession` session rule |
+| [10](#adr-10-normalizelineendings-and-regex-time-limit) | `NormalizeLineEndings` + regex time limit |
+| [11](#adr-11-crashlog-and-isrecoverable) | `CrashLog` and `IsRecoverable` |
+| [12](#adr-12-theme-via-resourcedictionary) | Theme via `ResourceDictionary` |
+| [13](#adr-13-appthememode-name) | `AppThemeMode` name |
+| [14](#adr-14-preview-rendering-debounce-background-parse-and-generation-check) | Preview rendering: debounce, background parse, generation check |
+| [15](#adr-15-settings-never-throw-and-are-merged-on-save) | Settings never throw, merged on save |
+| [16](#adr-16-documents-opened-only-via-openfile-with-size-limits) | Documents opened only via `OpenFile`, size limits |
+| [17](#adr-17-link-clicks-in-preview) | Link clicks in preview |
+| [18](#adr-18-file-association-scripts-are-hkcu-only) | File association scripts HKCU only (development tools; the app uses ADR-30) |
+| [19](#adr-19-print-preview-via-in-memory-xps-package) | Print Preview via in-memory XPS package |
+| [20](#adr-20-snapshot-when-preview-opens-and-shared-parse) | Snapshot when preview opens and shared parse |
+| [21](#adr-21-page-footer-inside-the-bottom-margin) | Page footer inside the bottom margin |
+| [22](#adr-22-preview-has-its-own-paper-settings-and-confirmation-when-the-print-dialog-differs) | Preview has its own paper settings + confirmation when the Print dialog differs |
+| [23](#adr-23-print-documents-are-always-light-themed) | Print documents are always light-themed |
+| [24](#adr-24-error-documents-are-never-printed) | Error documents are never printed |
+| [25](#adr-25-preview-errors-wrapped-in-guard-and-xps-package-cleaned-up-after-idle) | Preview errors wrapped in `Guard`, XPS package cleaned up after idle |
+| [26](#adr-26-test-only-seams-in-print-code) | Test-only seams in print code |
+| [27](#adr-27-self-contained-folder-not-single-file-and-per-user-installer) | Self-contained folder (not single-file) and per-user installer |
+| [28](#adr-28-portable-mode-via-makdonportable-marker-data-in-data) | Portable mode via `Makdon.portable` marker; data in `data\` |
+| [29](#adr-29-single-instance-scope-per-exe-folder-for-portable) | Single-instance scope per exe folder for portable |
+| [30](#adr-30-portable-open-with-registration-in-hkcu-via-fileassociation-and-iregistrystore-refused-when-installed) | Portable "Open with" registration in HKCU via `FileAssociation` + `IRegistryStore`; refused when installed |
+| [31](#adr-31-fixed-installer-mutex-name-makdonappmutex-not-restart-manager) | Fixed installer mutex name (`Makdon.AppMutex`), not Restart Manager |
+| [32](#adr-32-net-10-and-xps-switch-in-runtimeconfig) | .NET 10 and XPS switch in runtimeconfig |
+| [33](#adr-33-wpfhost-uses-testapp-without-onstartup) | `WpfHost` uses `TestApp` without `OnStartup` |
 
 ---
 
-## ADR-01 Simpan atomik dengan fallback `WriteInPlace`
+## ADR-01 Atomic save with fallback `WriteInPlace`
 
-- **Konteks.** File dokumen tidak boleh rusak setengah jalan bila penulisan gagal (README: "Penyimpanan atomik (file sementara
-  lalu ganti)"). Di sisi lain ada folder yang tidak bisa dibuatkan file baru padahal file-nya bisa ditulis, dan nama file panjang
-  bisa membuat nama sementara melewati batas panjang path (komentar `TextFileIO.cs:145, 155-157`).
-- **Keputusan.** `TextFileIO.WriteBytesAtomic` menulis ke `~md` + 8 heks + `.tmp` di folder yang sama (`FileMode.CreateNew`,
-  `Flush(true)`), lalu `File.Replace` (atau `File.Move(overwrite)` bila `ReplaceFile` tidak didukung, mis. share jaringan
-  tertentu). Bila gagal, file sementara dihapus. Hanya `UnauthorizedAccessException` dan `PathTooLongException` saat membuat file
-  sementara yang jatuh ke `WriteInPlace`; galat I/O lain (disk penuh, pelanggaran berbagi, folder hilang) tidak dicoba lagi lewat
-  jalur non-atomik "yang lebih berisiko" (komentar kode) dan diteruskan ke pemanggil. `WriteInPlace` menulis dari awal lalu `SetLength` (tidak mengosongkan
-  dulu) agar kegagalan di tengah tidak menghapus seluruh isi lama. Bila path adalah symlink, penulisan menuju file sebenarnya
-  (`ResolveLinkTarget`) sehingga link tidak diganti file biasa. Hash yang dikembalikan adalah hash byte yang benar-benar ditulis.
-- **Konsekuensi.** File `~md########.tmp` muncul sebentar di folder dokumen. Jalur `WriteInPlace` tidak atomik (README, bagian
-  Batasan). Penulisan dokumen, ekspor HTML, dan `settings.json` memakai jalur yang sama: `TextFileIO.Write`. Pengecualian: `crash.log`
-  ditulis dengan `File.AppendAllText` (`CrashLog.cs:40`), bukan atomik.
-- **Bukti.** `src/Makdon/TextFileIO.cs:134-202`, `HtmlExporter.cs:66`, `AppSettings.cs:85`. Test:
-  `TextFileIOCoverageTests.WriteBytesAtomic_*` (`IoAndUtilityCoverageTests.cs:97-196`, termasuk fallback lewat ACL deny
-  CreateFiles), `TextFileIOHardeningTests.Write_VeryLongFileName_StillSavesAtomically` (`HardeningTests.cs:669`),
-  `TextFileIOFileTests.Write_*` (`TextFileIOTests.cs:295-445`). Penulisan lewat symlink hanya teruji bila mesin boleh membuat symlink
-  (test keluar diam-diam bila tidak, `TextFileIOTests.cs:446-461`).
+- **Context.** A document file must not be left corrupted halfway if a write fails (README: "Atomic save (temporary file, then replace)"). On the other hand, there are folders where a new file cannot be created even though an existing file can be written, and long file names can make the temporary name exceed the path length limit (comment `TextFileIO.cs:145, 155-157`).
+- **Decision.** `TextFileIO.WriteBytesAtomic` writes to `~md` + 8 hex characters + `.tmp` in the same folder (`FileMode.CreateNew`, `Flush(true)`), then `File.Replace` (or `File.Move(overwrite)` when `ReplaceFile` is not supported, e.g. certain network shares). On failure, the temporary file is deleted. Only `UnauthorizedAccessException` and `PathTooLongException` raised while creating the temporary file fall back to `WriteInPlace`; other I/O errors (disk full, sharing violation, missing folder) are not retried through the non-atomic path that is "more risky" (code comment) and are passed to the caller. `WriteInPlace` writes from the start and then calls `SetLength` (it does not truncate first) so that a failure midway does not erase the entire old content. If the path is a symlink, the write goes to the actual target file (`ResolveLinkTarget`) so the link is not replaced by a regular file. The returned hash is the hash of the bytes actually written.
+- **Consequences.** A `~md########.tmp` file briefly appears in the document folder. The `WriteInPlace` path is not atomic (README, Known limitations section). Document saves, HTML export, and `settings.json` all use the same path: `TextFileIO.Write`. Exception: `crash.log` is written with `File.AppendAllText` (`CrashLog.cs:40`), not atomically.
+- **Evidence.** `src/Makdon/TextFileIO.cs:134-202`, `HtmlExporter.cs:66`, `AppSettings.cs:85`. Tests: `TextFileIOCoverageTests.WriteBytesAtomic_*` (`IoAndUtilityCoverageTests.cs:97-196`, including the fallback via ACL deny CreateFiles), `TextFileIOHardeningTests.Write_VeryLongFileName_StillSavesAtomically` (`HardeningTests.cs:669`), `TextFileIOFileTests.Write_*` (`TextFileIOTests.cs:295-445`). Writes through a symlink are only tested if the machine is allowed to create symlinks (the test exits silently otherwise, `TextFileIOTests.cs:446-461`).
 
-## ADR-02 Deteksi encoding dan penanda lossy
+## ADR-02 Encoding detection and lossy marker
 
-- **Konteks.** README: encoding dipertahankan saat menyimpan (UTF-8 dengan/tanpa BOM, UTF-16, UTF-32, Windows-1252) dan file
-  dengan byte tidak valid "ditandai dan meminta konfirmasi sebelum disimpan". Test `DecodeThenEncode_IsByteIdentical` menjadikan
-  "buka lalu simpan tanpa edit = byte identik" sebagai sifat yang dijaga.
-- **Keputusan.** Urutan deteksi: BOM (UTF-32 LE dicek sebelum UTF-16 LE) -> UTF-8 tanpa BOM yang valid -> Windows-1252. Bila
-  dekode 1252 tidak kembali ke byte yang sama (byte tak terdefinisi di 1252), jatuh ke Latin-1 yang memetakan 256 byte satu-satu.
-  File ber-BOM dengan isi tidak valid didekode ketat dulu, lalu longgar (U+FFFD) dan `lossy = true` (`DocumentTab.IsLossyDecoded`);
-  `MainWindow.TrySave` menanyakan konfirmasi. File tanpa BOM yang bukan UTF-8 valid jatuh ke 1252 dan **tidak** dianggap lossy.
-  `Encode` memakai fallback pengecualian: bila teks tak muat di encoding aslinya (mis. karakter di luar 1252), simpan sebagai UTF-8
-  tanpa BOM daripada mengganti karakter dengan `?`; surrogate yatim memakai penggantian bawaan karena tak ada encoding yang bisa
-  memuatnya.
-- **Konsekuensi.** File 1252 bisa berganti menjadi UTF-8 saat disimpan (label status bar diperbarui lewat `EncodingLabel`).
-  Simpan setelah dekode lossy menetapkan penggantian U+FFFD secara permanen (karena itu ada konfirmasi); `SaveCore` menghapus flag.
-  Deteksi 1252-vs-lain berbasis heuristik "bukan UTF-8 valid", jadi file encoding lain tanpa BOM (mis. Shift-JIS) dibaca sebagai 1252
-  (belum diuji; inferensi dari urutan deteksi).
-- **Bukti.** `TextFileIO.cs:40-127`, `DocumentTab.cs:81, 183`, `MainWindow.xaml.cs:431-434`. Test: `TextFileIODecodeTests`
-  (`TextFileIOTests.cs:6-162`), `Decode_EachBomWithInvalidBody_IsLossy_*` (`IoAndUtilityCoverageTests.cs:43`), `Lossy_*`
-  (`DocumentTabConflictEdgeTests.cs:482-578`).
+- **Context.** README: encoding is preserved when saving (UTF-8 with/without BOM, UTF-16, UTF-32, Windows-1252), and files with invalid bytes are "marked and asked for confirmation before saving". The test `DecodeThenEncode_IsByteIdentical` makes "open then save without editing = byte-identical" a property that is guarded.
+- **Decision.** Detection order: BOM (UTF-32 LE is checked before UTF-16 LE) -> valid UTF-8 without BOM -> Windows-1252. If decoding as 1252 does not round-trip to the same bytes (undefined bytes in 1252), it falls back to Latin-1, which maps all 256 bytes one-to-one. A file with a BOM and an invalid body is first decoded strictly, then leniently (U+FFFD) with `lossy = true` (`DocumentTab.IsLossyDecoded`); `MainWindow.TrySave` asks for confirmation. A file without BOM that is not valid UTF-8 falls to 1252 and is **not** treated as lossy. `Encode` uses an exception fallback: if the text does not fit the original encoding (e.g. characters outside 1252), it is saved as UTF-8 without BOM instead of replacing characters with `?`; orphan surrogates use the default replacement because no encoding can hold them.
+- **Consequences.** A 1252 file may change to UTF-8 when saved (the status bar label is updated via `EncodingLabel`). Saving after a lossy decode permanently sets U+FFFD replacements (hence the confirmation); `SaveCore` clears the flag. The 1252-vs-other detection is based on the heuristic "not valid UTF-8", so other encodings without BOM (e.g. Shift-JIS) are read as 1252 (not tested; inferred from the detection order).
+- **Evidence.** `TextFileIO.cs:40-127`, `DocumentTab.cs:81, 183`, `MainWindow.xaml.cs:431-434`. Tests: `TextFileIODecodeTests` (`TextFileIOTests.cs:6-162`), `Decode_EachBomWithInvalidBody_IsLossy_*` (`IoAndUtilityCoverageTests.cs:43`), `Lossy_*` (`DocumentTabConflictEdgeTests.cs:482-578`).
 
-## ADR-03 Hash isi + `FileStamp` untuk perubahan eksternal
+## ADR-03 Content hash and `FileStamp` for external changes
 
-- **Konteks.** Komentar `DocumentTab.cs:33-36`: perubahan disk dianggap nyata hanya bila hash-nya berbeda, "sehingga simpan oleh
-  aplikasi sendiri atau sekadar touch tidak memicu prompt palsu"; stempel (ukuran + waktu tulis) mendampingi agar pemeriksaan
-  berulang (tiap jendela aktif, file besar) tidak membaca file bila jelas tidak berubah. Komentar `FileStamp.cs:3-7`: dua tulis
-  berurutan bisa berbagi timestamp dan ukuran yang sama, jadi stempel yang diambil < 2 dtk setelah tulis tidak andal.
-- **Keputusan.** `diskHash` (SHA-256 hex) adalah dasar kebenaran. `FileStamp.IsReliable` (`TakenUtc - LastWriteUtc > 2 dtk`)
-  menjadi jalan pintas: stempel andal dan sama dengan yang diketahui (`diskStamp` atau `pendingStamp`) = lewati baca. Selain itu
-  baca byte dan bandingkan hash. Perubahan yang sudah dilaporkan disimpan sebagai `pendingHash`/`pendingStamp` dan `diskHash` tidak
-  diubah sampai pengguna menjawab, sehingga: (a) perubahan yang sama tidak ditanyakan dua kali, (b) menyimpan sebelum menjawab tetap
-  mendeteksi konflik. Stempel diambil **sebelum** membaca (`DocumentTab.Load`, `Reload`) agar perubahan di antaranya tetap
-  terdeteksi. Watcher didebounce 400 ms dan percobaan baca maksimal 5 kali (1 baca awal + 4 ulangan; `++changeRetries < MaxChangeRetries`) bila file terkunci penulisnya; saat jendela aktif
-  kembali, tab aktif diperiksa sebagai cadangan (share jaringan tanpa dukungan watcher).
-- **Konsekuensi.** File yang baru ditulis (< 2 dtk) dibaca penuh tiap pemeriksaan. Semua pembacaan sinkron di UI thread. Pemeriksaan
-  saat aktivasi hanya untuk tab aktif (`MainWindow.xaml.cs:55`); tab lain bergantung pada watcher.
-- **Bukti.** `DocumentTab.cs:37-43, 227-277, 300-321`, `FileStamp.cs`. Test: `FileStamp_IsReliable_*`
-  (`IoAndUtilityCoverageTests.cs:265`), `CheckExternalChange_SameSizeAndTimestampButDifferentContent_IsStillDetected`
-  (`DocumentTabConflictEdgeTests.cs:398`), `*_TouchWithIdenticalContent_IsIgnored`, `ExternalConflict_*`
-  (`DocumentTabConflictEdgeTests.cs:331-393`). Jalur watcher + timer 400 ms **tidak** diuji end-to-end: test memanggil
-  `CheckExternalChange()` langsung (komentar `DocumentTabTests.cs:8-11`).
+- **Context.** Comment `DocumentTab.cs:33-36`: a disk change is considered real only if its hash differs, "so that a save by the app itself or a mere touch does not trigger a false prompt"; the stamp (size + last write time) accompanies it so that repeated checks (every window activation, large files) do not read the file when it is clearly unchanged. Comment `FileStamp.cs:3-7`: two successive writes can share the same timestamp and size, so a stamp taken less than 2 s after a write is not reliable.
+- **Decision.** `diskHash` (SHA-256 hex) is the ground truth. `FileStamp.IsReliable` (`TakenUtc - LastWriteUtc > 2 s`) is a shortcut: if the stamp is reliable and equal to the known one (`diskStamp` or `pendingStamp`), the read is skipped. Otherwise the bytes are read and the hash compared. A change that has already been reported is stored as `pendingHash`/`pendingStamp`, and `diskHash` is not updated until the user answers, so: (a) the same change is not asked about twice, (b) saving before answering still detects the conflict. The stamp is taken **before** reading (`DocumentTab.Load`, `Reload`) so that changes in between are still detected. The watcher is debounced by 400 ms and a read is retried at most 5 times (1 initial read + 4 retries; `++changeRetries < MaxChangeRetries`) when the file is locked by its writer. When the window becomes active again, the active tab is checked as a fallback (network shares without watcher support).
+- **Consequences.** A file that was just written (< 2 s) is read in full on every check. All reads are synchronous on the UI thread. The check on activation is only for the active tab (`MainWindow.xaml.cs:55`); other tabs rely on the watcher.
+- **Evidence.** `DocumentTab.cs:37-43, 227-277, 300-321`, `FileStamp.cs`. Tests: `FileStamp_IsReliable_*` (`IoAndUtilityCoverageTests.cs:265`), `CheckExternalChange_SameSizeAndTimestampButDifferentContent_IsStillDetected` (`DocumentTabConflictEdgeTests.cs:398`), `*_TouchWithIdenticalContent_IsIgnored`, `ExternalConflict_*` (`DocumentTabConflictEdgeTests.cs:331-393`). The watcher + 400 ms timer path is **not** tested end-to-end: tests call `CheckExternalChange()` directly (comment `DocumentTabTests.cs:8-11`).
 
-## ADR-04 Muat ulang adalah satu langkah Undo
+## ADR-04 Reload is a single Undo step
 
-- **Konteks.** Pengguna bisa salah memilih "Muat dari Disk" di dialog konflik; edit yang terbuang tidak boleh hilang permanen
-  (komentar `DocumentTab.cs:203-205, 323-324`). README: "Muat dari Disk adalah satu langkah Undo".
-- **Keputusan.** `ApplyDiskContent` mengganti seluruh teks di dalam satu `UndoStack.StartUndoGroup/EndUndoGroup`, lalu
-  `MarkAsOriginalFile`. Berlaku sama untuk muat ulang otomatis tab bersih, pilihan "Muat dari Disk" di konflik eksternal, dan di
-  konflik simpan. File dibaca ulang **setelah** dialog ditutup (`Reload()` memanggil `ReadBytes` saat itu), bukan memakai byte saat
-  konflik terdeteksi, karena dialog bisa terbuka lama.
-- **Konsekuensi.** Setelah muat ulang tab bersih tetapi `Undo` tersedia; Undo membuat tab kotor lagi. Caret dipertahankan dan
-  diklem ke panjang teks baru.
-- **Bukti.** `DocumentTab.cs:206-211, 325-345`. Test: `Reload_DiscardsEditorChangesAndTakesDiskContent`
-  (`DocumentTabTests.cs:846`), `CheckExternalChange_CleanTab_AutoReloadIsOneUndoStep` (`:575`),
-  `SaveTo_Conflict_Reload_IsOneUndoStep_*` dan `*_ReadsTheFileAgainAfterTheDialog_*` (`DocumentTabConflictEdgeTests.cs:167, 211`).
+- **Context.** A user may wrongly choose "Reload from Disk" (`Muat dari Disk`) in the conflict dialog; discarded edits must not be lost permanently (comment `DocumentTab.cs:203-205, 323-324`). README: `Muat dari Disk` (Reload from Disk) is a single Undo step.
+- **Decision.** `ApplyDiskContent` replaces the whole text inside one `UndoStack.StartUndoGroup/EndUndoGroup`, then calls `MarkAsOriginalFile`. The same applies to the automatic reload of a clean tab, the "Reload from Disk" choice in an external conflict, and a save conflict. The file is read again **after** the dialog closes (`Reload()` calls `ReadBytes` at that time), not using the bytes captured when the conflict was detected, because the dialog may stay open for a long time.
+- **Consequences.** After reloading a clean tab, `Undo` is still available; Undo makes the tab dirty again. The caret is preserved and clamped to the new text length.
+- **Evidence.** `DocumentTab.cs:206-211, 325-345`. Tests: `Reload_DiscardsEditorChangesAndTakesDiskContent` (`DocumentTabTests.cs:846`), `CheckExternalChange_CleanTab_AutoReloadIsOneUndoStep` (`:575`), `SaveTo_Conflict_Reload_IsOneUndoStep_*` and `*_ReadsTheFileAgainAfterTheDialog_*` (`DocumentTabConflictEdgeTests.cs:167, 211`).
 
-## ADR-05 Dialog konflik berlabel dan diserialisasi
+## ADR-05 Labeled and serialized conflict dialog
 
-- **Konteks.** `ChoiceDialog` dibuat sebagai "pengganti MessageBox Ya/Tidak/Batal yang ambigu" (komentar
-  `ChoiceDialog.xaml.cs:10-13`). Dialog modal WPF tetap memompa pesan, jadi event lain (watcher, aktivasi) bisa memicu konflik tab
-  lain atau konflik kedua untuk file yang sama saat dialog terbuka (komentar `MainWindow.xaml.cs:324-325`, `DocumentTab.cs:48-49`).
-- **Keputusan.** Semua dialog konflik memakai `ChoiceDialog` dengan label yang menjelaskan akibat ("Muat dari Disk", "Pertahankan
-  Editor", "Timpa", "Batal"); pilihan paling aman jadi bawaan (Enter) dan Esc/X = pilihan batal. Penanda `conflictPromptOpen` +
-  `conflictQueue` menyerialisasi dialog; `OnSaveConflict` memakai penanda yang sama. `DocumentTab.SaveTo` menyetel `saving = true`
-  sehingga `CheckExternalChange` tab itu ditunda selama dialog konflik simpan terbuka. Konflik yang datang selama `SaveTo`
-  ditanyakan setelah `SaveTo` selesai (`TrySave` -> `ProcessConflictQueue`, kecuali sedang `closing`).
-- **Konsekuensi.** Tidak boleh menampilkan `MessageBox`/dialog konflik langsung dari event (aturan CLAUDE.md). Konflik tidak pernah
-  bertumpuk atau hilang diam-diam.
-- **Bukti.** `MainWindow.xaml.cs:318-394, 429-450`, `ChoiceDialog.xaml.cs`. Test: `ChoiceDialogTests` (`ChoiceDialogTests.cs:46-66`),
-  `SaveTo_Conflict_SuppressesExternalChangeChecksWhileTheDialogIsOpen` (`DocumentTabConflictEdgeTests.cs:237`). Logika antrean di
-  `MainWindow` **tidak** diuji (tidak ada test yang membuat `MainWindow`).
+- **Context.** `ChoiceDialog` was created as a "replacement for the ambiguous Yes/No/Cancel MessageBox" (comment `ChoiceDialog.xaml.cs:10-13`). A WPF modal dialog still pumps messages, so other events (watcher, activation) can trigger a conflict in another tab, or a second conflict for the same file while the dialog is open (comments `MainWindow.xaml.cs:324-325`, `DocumentTab.cs:48-49`).
+- **Decision.** All conflict dialogs use `ChoiceDialog` with labels that explain the consequence: `Muat dari Disk` (Reload from Disk), `Pertahankan Editor` (Keep Editor), `Timpa` (Overwrite), `Batal` (Cancel). The safest choice is the default (Enter), and Esc/X = cancel. The `conflictPromptOpen` flag + `conflictQueue` serialize the dialogs; `OnSaveConflict` uses the same flag. `DocumentTab.SaveTo` sets `saving = true`, so `CheckExternalChange` for that tab is deferred while a save-conflict dialog is open. Conflicts that arrive during `SaveTo` are asked after `SaveTo` completes (`TrySave` -> `ProcessConflictQueue`, unless `closing`).
+- **Consequences.** A `MessageBox`/conflict dialog must not be shown directly from an event (CLAUDE.md rule). Conflicts never stack up or disappear silently.
+- **Evidence.** `MainWindow.xaml.cs:318-394, 429-450`, `ChoiceDialog.xaml.cs`. Tests: `ChoiceDialogTests` (`ChoiceDialogTests.cs:46-66`), `SaveTo_Conflict_SuppressesExternalChangeChecksWhileTheDialogIsOpen` (`DocumentTabConflictEdgeTests.cs:237`). The queue logic in `MainWindow` is **not** tested (no test creates a `MainWindow`).
 
-## ADR-06 Pipeline ekspor terpisah, allowlist URL, dan anggaran data URI
+## ADR-06 Separate export pipeline, URL allowlist, and data URI budget
 
-- **Konteks.** Ekspor menghasilkan file yang dibagikan dan dibuka di peramban pihak lain, sedangkan pratinjau dirender WPF
-  (`FlowDocument`), bukan HTML. README/CLAUDE.md: "Jangan menyatukan keduanya".
-- **Keputusan.**
-  - `MarkdownSupport.Pipeline` (pratinjau) dan `ExportPipeline` dipisah. `ExportPipeline` = ekstensi yang sama +
-    `DisableHtml()` (HTML mentah di-escape) dan menghapus `GenericAttributesExtension` (`{onclick=...}`) dan `MediaLinkExtension`
-    (gambar menjadi `<iframe>`). Pratinjau tetap mengurai HTML mentah (renderer WPF mengabaikannya, README).
-  - URL disaring `ClassifyUrl` (allowlist, bukan blocklist): `Relative`, `Http`, `Mailto`, `DataImage`
-    (`png|jpeg|gif|webp`), `LocalFile`, selain itu `Blocked` (`javascript:`, `vbscript:`, `data:` lain, `file://host`, UNC, `//host`,
-    skema tak dikenal). Spasi/karakter kontrol dibuang sebelum deteksi skema (browser membuang tab/baris baru di `java\tscript:`).
-    Tautan tak aman menjadi `href="#"`; autolink tak aman menjadi teks; gambar tak aman menjadi teks penanda dengan alt di-escape.
-  - Gambar lokal disematkan sebagai data URI hanya bila: tipe png/jpg/jpeg/gif/webp (berdasarkan ekstensi), <= 2 MB per gambar
-    (`MaxEmbeddedImageBytes`), dan berada **di bawah folder dokumen**; yang di luar (absolut ke folder lain, `../`, symlink yang
-    menunjuk keluar) diganti teks `[gambar di luar folder dokumen tidak disertakan]` (privasi: file lain di mesin tidak ikut
-    terekspor). Dokumen tanpa folder tidak menyematkan gambar lokal apa pun. Anggaran total `MaxTotalEmbeddedBytes` = 30 MB, dihitung
-    per kemunculan (tiap kemunculan menambah ukuran HTML); setelah habis path relatif dibiarkan relatif. Gambar yang sama dibaca dan
-    dikodekan sekali (cache per path lengkap).
-  - Bila tidak disematkan, path relatif tetap relatif (tidak pernah menjadi `file:///C:/...`); path absolut lokal diganti teks
-    sehingga path mesin tidak bocor. Judul di-`HtmlEncode`; template diisi satu pass sehingga `{{BODY}}`/`{{TITLE}}` di isi atau
-    judul tetap literal.
-- **Konsekuensi.** HTML hasil ekspor bisa sampai ~30 MB data gambar. SVG/BMP dan gambar > 2 MB tidak tersemat. Gambar `http(s)`
-  tetap dirujuk apa adanya di HTML (penerima yang membukanya bisa dilacak). Tipe gambar ditentukan dari ekstensi, bukan isi.
-  Ekspor berjalan sinkron di UI thread; `OutOfMemoryException` dan galat lain ditangkap di `ExportHtml_Executed`.
-- **Bukti.** `MarkdownSupport.cs:58-78, 86-115, 213-358`, `HtmlExporter.cs`, `MainWindow.xaml.cs:727-742`. Test:
-  `ExportSanitizationTests` (`HardeningTests.cs:10-185`), `ExportXssVectorTests` (`ExportAndImageSecurityTests.cs:11-327`),
-  `ExportImageBudgetAndPrivacyTests` (seluruh berkas), `HtmlExporterTests` (`HtmlAndMarkdownSupportTests.cs:212-382`). Cabang
-  symlink-menunjuk-keluar (`MarkdownSupport.cs:333-334`) tidak punya test.
+- **Context.** Export produces a file that is shared and opened in other people's browsers, whereas the preview is rendered by WPF (`FlowDocument`), not HTML. README/CLAUDE.md: "Do not merge the two".
+- **Decision.**
+  - `MarkdownSupport.Pipeline` (preview) and `ExportPipeline` are separate. `ExportPipeline` = the same extensions + `DisableHtml()` (raw HTML is escaped) and without `GenericAttributesExtension` (`{onclick=...}`) and `MediaLinkExtension` (images become `<iframe>`). The preview still parses raw HTML (the WPF renderer ignores it, README).
+  - URLs are filtered by `ClassifyUrl` (allowlist, not blocklist): `Relative`, `Http`, `Mailto`, `DataImage` (`png|jpeg|gif|webp`), `LocalFile`; anything else is `Blocked` (`javascript:`, `vbscript:`, other `data:`, `file://host`, UNC, `//host`, unknown schemes). Spaces/control characters are removed before scheme detection (browsers strip tabs/newlines in `java\tscript:`). An unsafe link becomes `href="#"`; an unsafe autolink becomes text; an unsafe image becomes a marker text with the alt text escaped.
+  - A local image is embedded as a data URI only if: the type is png/jpg/jpeg/gif/webp (by extension), <= 2 MB per image (`MaxEmbeddedImageBytes`), and it is located **under the document folder**; anything outside (absolute to another folder, `../`, a symlink pointing outside) is replaced by the text `[gambar di luar folder dokumen tidak disertakan]` (image outside the document folder not included) (privacy: other files on the machine are not exported). A document without a folder embeds no local images. The total budget `MaxTotalEmbeddedBytes` = 30 MB is counted per occurrence (each occurrence adds its size to the HTML); after the budget is used up, relative paths are left relative. The same image is read and encoded only once (cache per full path).
+  - When not embedded, relative paths stay relative (they never become `file:///C:/...`); absolute local paths are replaced by text so that machine paths do not leak. The title is `HtmlEncode`d; the template is filled in a single pass so that `{{BODY}}`/`{{TITLE}}` in the content or title remain literal.
+- **Consequences.** The HTML output can reach about 30 MB of image data. SVG/BMP and images > 2 MB are not embedded. `http(s)` images are kept as referenced in the HTML (the recipient who opens it can be tracked). The image type is determined from the extension, not the content. Export runs synchronously on the UI thread; `OutOfMemoryException` and other errors are caught in `ExportHtml_Executed`.
+- **Evidence.** `MarkdownSupport.cs:58-78, 86-115, 213-358`, `HtmlExporter.cs`, `MainWindow.xaml.cs:727-742`. Tests: `ExportSanitizationTests` (`HardeningTests.cs:10-185`), `ExportXssVectorTests` (`ExportAndImageSecurityTests.cs:11-327`), `ExportImageBudgetAndPrivacyTests` (whole file), `HtmlExporterTests` (`HtmlAndMarkdownSupportTests.cs:212-382`). The symlink-points-outside branch (`MarkdownSupport.cs:333-334`) has no test.
 
-## ADR-07 Pemblokiran gambar remote/UNC di pratinjau dan cetak
+## ADR-07 Blocking remote/UNC images in preview and print
 
-- **Konteks.** README: gambar remote diganti penanda secara bawaan "agar dokumen tidak bisa melacak Anda"; UNC dan skema lain
-  (`ftp:` dll.) selalu diblokir tanpa koneksi jaringan; `data:` tidak ditampilkan karena WPF tidak mendukungnya. Komentar
-  `DocumentViewLifecycleTests.cs:465-466`: sebelum perbaikan, `BitmapImage(Uri)` melempar `NotSupportedException` untuk `data:` dan
-  seluruh pratinjau berganti dokumen galat.
-- **Keputusan.** `ResolveImageUrls` (dijalankan pada dokumen hasil parse, juga di thread latar) memutuskan per `UrlKind`:
-  `DataImage` -> teks `[gambar data: tidak ditampilkan di pratinjau]`; `Blocked`/`Mailto` (UNC, `file://host`, `//host`, `ftp:`,
-  dst.) -> `[gambar remote diblokir]` selalu; `Http` -> diblokir bila `BlockRemoteImages` (bawaan `true`, disimpan di
-  `AppSettings`, menu Tampilan > "Muat gambar remote"). Setelah klasifikasi hanya `file:` tanpa host yang diteruskan ke WPF; path
-  UNC hasil gabungan hanya boleh bila dokumen sendiri ada di share yang sama (`IsAllowedLocalPath`). Cetak dan Pratinjau Cetak memakai
-  `ParseDocument` yang sama (lewat `DocumentView.ParsePrintSnapshot`, [ADR-20](#adr-20-snapshot-saat-pratinjau-dibuka-dan-parse-yang-dipakai-bersama)). Jaring pengaman: `ReplaceUnloadableImages` mengganti gambar lokal yang ada tetapi tak bisa di-decode dengan teks, supaya satu
-  gambar rusak tidak menggagalkan seluruh pratinjau.
-- **Konsekuensi.** `BlockRemoteImages` adalah flag statis global (`DocumentView.BlockRemoteImages`), bukan per tab; mengubahnya
-  memanggil `RefreshPreview` di semua tab. Gambar `data:` sah tampil di ekspor tetapi tidak di pratinjau. Pratinjau tidak
-  membatasi gambar lokal ke folder dokumen (hanya ekspor yang membatasi).
-- **Bukti.** `MarkdownSupport.cs:122-200`, `DocumentView.xaml.cs:56, 424-527`, `MainWindow.xaml.cs:125-131`. Test:
-  `ResolveImageUrlsSecurityTests` (`ExportAndImageSecurityTests.cs:330-491`), `RemoteImageBlockingTests` (`HardeningTests.cs:188-280`),
-  `RemoteImageOverFtp_IsNotFetched_WhenRemoteImagesAreBlocked` (membuka `TcpListener` lokal dan memastikan WPF tidak terhubung,
-  `DocumentViewLifecycleTests.cs:510`), `UndecodableImage_*` (`:414-459`), `DataImage_ShowsMarker_*` (`:468`).
+- **Context.** README: remote images are replaced by a marker by default "so that a document cannot track you"; UNC and other schemes (`ftp:` etc.) are always blocked without a network connection; `data:` is not displayed because WPF does not support it. Comment `DocumentViewLifecycleTests.cs:465-466`: before the fix, `BitmapImage(Uri)` threw `NotSupportedException` for `data:` and the whole preview was replaced by an error document.
+- **Decision.** `ResolveImageUrls` (run on the parsed document, also on a background thread) decides per `UrlKind`: `DataImage` -> text `[gambar data: tidak ditampilkan di pratinjau]` (data image: not shown in preview); `Blocked`/`Mailto` (UNC, `file://host`, `//host`, `ftp:`, etc.) -> `[gambar remote diblokir]` (remote image blocked) always; `Http` -> blocked when `BlockRemoteImages` (default `true`, stored in `AppSettings`, menu `Tampilan > "Muat gambar remote"` (View > "Load remote images")). After classification, only `file:` without host is passed to WPF; a UNC path resulting from combination is allowed only if the document itself is in the same share (`IsAllowedLocalPath`). Printing and Print Preview use the same `ParseDocument` (via `DocumentView.ParsePrintSnapshot`, [ADR-20](#adr-20-snapshot-when-preview-opens-and-shared-parse)). Safety net: `ReplaceUnloadableImages` replaces local images that exist but cannot be decoded with text, so that one broken image does not fail the entire preview.
+- **Consequences.** `BlockRemoteImages` is a global static flag (`DocumentView.BlockRemoteImages`), not per tab; changing it calls `RefreshPreview` in all tabs. A valid `data:` image is shown in export but not in the preview. The preview does not restrict local images to the document folder (only export does).
+- **Evidence.** `MarkdownSupport.cs:122-200`, `DocumentView.xaml.cs:56, 424-527`, `MainWindow.xaml.cs:125-131`. Tests: `ResolveImageUrlsSecurityTests` (`ExportAndImageSecurityTests.cs:330-491`), `RemoteImageBlockingTests` (`HardeningTests.cs:188-280`), `RemoteImageOverFtp_IsNotFetched_WhenRemoteImagesAreBlocked` (opens a local `TcpListener` and checks that WPF does not connect, `DocumentViewLifecycleTests.cs:510`), `UndecodableImage_*` (`:414-459`), `DataImage_ShowsMarker_*` (`:468`).
 
-## ADR-08 Single-instance dengan Mutex dan named pipe per sesi
+## ADR-08 Single-instance Mutex and per-session named pipe (plus portable scope, ADR-29)
 
-- **Konteks.** Membuka `.md` saat Makdon berjalan harus membuka tab di jendela yang ada, tetapi sesi Windows lain (mis. Remote
-  Desktop) punya instance sendiri (README). Komentar `SingleInstance.cs:10-14`: `Mutex` `Local\` sudah per sesi, sedangkan nama pipe
-  global se-mesin sehingga id sesi dimasukkan ke nama pipe agar cakupannya sama.
-- **Keputusan.** Nama mutex `Local\Makdon.SingleInstance.<SID>[.<scope>]`; nama pipe `Makdon.<SID>.s<sessionId>[.<scope>]`; pipe
-  dibuka `PipeOptions.CurrentUserOnly` di kedua sisi, satu instance server. Protokol teks UTF-8: baris pertama harus persis
-  `MAKDON1`, lalu satu path per baris. Penerima menerima hanya path **fully-qualified** (`Path.IsPathFullyQualified`; `C:rel.md` dan
-  `\rel.md` ditolak karena bergantung folder/drive kerja), panjang < 32768, maksimal 64 path, pesan maksimal 256 K karakter, batas
-  baca 5 dtk per klien. `BuildMessage` membuang entri yang mengandung `\n`/`\r` (injeksi path). Klien yang macet atau mengirim sampah
-  tidak menambah hitungan kegagalan; hanya kegagalan membuat/menunggu pipe yang dihitung (menyerah setelah 5). Seluruh kelas "tidak pernah
-  melempar": bila mutex/pipe tak bisa dipakai, pemanggil membuka instance baru. `scope` memungkinkan test memakai nama unik. `App`
-  mengubah argumen relatif menjadi mutlak sebelum dikirim.
-- **Konsekuensi.** File yang dikirim ke instance yang sedang menutup diabaikan; peluncuran kedua tanpa argumen hanya mengaktifkan
-  jendela yang ada (README). Server hanya berhenti sendiri setelah gagal berulang (dicatat ke `CrashLog`); sesudahnya peluncuran
-  berikutnya dikirim ke pipe yang tidak melayani lalu gagal dan membuka instance sendiri (inferensi dari alur `App.OnStartup`, tidak diuji).
-- **Bukti.** `SingleInstance.cs`, `App.xaml.cs:19-47`. Test: `SingleInstanceServerTests` (24 test, scope unik per test) dan
-  `SingleInstanceTests` (`HardeningTests.cs:795-870`). Properti `CurrentUserOnly` sendiri tidak punya test yang membuktikan pengguna
-  lain ditolak (butuh akun kedua).
+- **Context.** Opening a `.md` while Makdon is running must open a tab in the existing window, but other Windows sessions (e.g. Remote Desktop) have their own instance (README). Comment `SingleInstance.cs:10-14`: a `Local\` `Mutex` is already per session, whereas a pipe name is global across the machine, so the session id is put into the pipe name to give it the same scope.
+- **Decision.** Mutex name `Local\Makdon.SingleInstance.<SID>[.<scope>]`; pipe name `Makdon.<SID>.s<sessionId>[.<scope>]`; the pipe is opened with `PipeOptions.CurrentUserOnly` on both sides, with one server instance. UTF-8 text protocol: the first line must be exactly `MAKDON1`, followed by one path per line. The receiver accepts only **fully-qualified** paths (`Path.IsPathFullyQualified`; `C:rel.md` and `\rel.md` are rejected because they depend on the working folder/drive), length < 32768, at most 64 paths, message at most 256K characters, and a 5 s read limit per client. `BuildMessage` discards entries containing `\n`/`\r` (path injection). A client that hangs or sends garbage does not add to the failure count; only failures to create/wait on the pipe are counted (gives up after 5). The whole class "never throws": if the mutex/pipe cannot be used, the caller opens a new instance. `scope` allows tests to use unique names. `App` converts relative arguments to absolute before sending them.
+- **Consequences.** Files sent to an instance that is closing are ignored; a second launch without arguments only activates the existing window (README). The server stops by itself only after repeated failures (logged to `CrashLog`); afterwards the next launch sends to a pipe that is not served, fails, and opens its own instance (inferred from the flow of `App.OnStartup`, not tested).
+- **Evidence.** `SingleInstance.cs`, `App.xaml.cs:19-47`. Tests: `SingleInstanceServerTests` (24 tests, unique scope per test) and `SingleInstanceTests` (`HardeningTests.cs:795-870`). The `CurrentUserOnly` property itself has no test proving that other users are denied (requires a second account).
 
-## ADR-09 Aturan sesi `preserveStoredSession`
+## ADR-09 `preserveStoredSession` session rule
 
-- **Konteks.** Instance yang dibuka lewat argumen (klik dua kali `.md`) hanya berisi file itu; menyimpan sesinya saat keluar akan
-  menimpa ruang kerja multi-tab yang tersimpan (README, bagian Lokasi data; CLAUDE.md).
-- **Keputusan.** `preserveStoredSession = files.Count > 0` di konstruktor `MainWindow`. Selama `true`, `SaveSettings` memanggil
-  `SaveMerged(keepStoredSession: true)` sehingga `Session` di file tidak disentuh (daftar berkas terakhir, tema, dan zoom tetap
-  disimpan). Setiap pembukaan atas kehendak pengguna lewat `OpenUserFile` (kiriman instance lain, dialog Buka, seret-lepas, Berkas
-  Terakhir, hanya bila tab benar-benar terbuka) mengubahnya menjadi `false` ("diadopsi"). Argumen startup dan pemulihan sesi memakai
-  `OpenFile` langsung sehingga tidak mengadopsi. Galat fatal memaksa simpan sesi (`forceSession`) karena sesi dan daftar tab terbuka
-  harus bisa dipulihkan.
-- **Konsekuensi.** Ada dua jalur pembukaan yang harus dibedakan dengan sengaja saat menambah fitur pembukaan file baru. Klik tautan
-  relatif antar-dokumen memakai `OpenFile` (bukan `OpenUserFile`), jadi tidak mengadopsi (`MainWindow.Attach`, `:310`).
-- **Bukti.** `MainWindow.xaml.cs:28-31, 58-61, 78-84, 217-234`, `AppSettings.cs:99-110`. Test hanya di tingkat `AppSettings`:
-  `SaveMerged_KeepStoredSession_*` (`HardeningTests.cs:763-783`, `IoAndUtilityCoverageTests.cs:769-802`). Logika `MainWindow` tidak diuji.
+- **Context.** An instance opened with an argument (double-clicking a `.md`) contains only that file; saving its session on exit would overwrite the stored multi-tab workspace (README, Data location section; CLAUDE.md).
+- **Decision.** `preserveStoredSession = files.Count > 0` in the `MainWindow` constructor. While `true`, `SaveSettings` calls `SaveMerged(keepStoredSession: true)`, so `Session` in the file is not touched (the recent file list, theme, and zoom are still saved). Each opening by the user's own action via `OpenUserFile` (a message from another instance, the Open dialog, drag-and-drop, `Berkas Terakhir` (Recent Files), only if the tab actually opens) sets it to `false` ("adopted"). Startup arguments and session restore use `OpenFile` directly, so they do not adopt. A fatal error forces a session save (`forceSession`) because the session and the list of open tabs must be restorable.
+- **Consequences.** Two opening paths must be distinguished deliberately when adding a new file-opening feature. A click on a relative link between documents uses `OpenFile` (not `OpenUserFile`), so it does not adopt (`MainWindow.Attach`, `:310`).
+- **Evidence.** `MainWindow.xaml.cs:28-31, 58-61, 78-84, 217-234`, `AppSettings.cs:99-110`. Tests only at the `AppSettings` level: `SaveMerged_KeepStoredSession_*` (`HardeningTests.cs:763-783`, `IoAndUtilityCoverageTests.cs:769-802`). The `MainWindow` logic is not tested.
 
-## ADR-10 `NormalizeLineEndings` dan batas waktu regex
+## ADR-10 `NormalizeLineEndings` and regex time limit
 
-- **Konteks.** Dokumen Windows memakai CRLF. Dengan `RegexOptions.Multiline`, `$` hanya cocok sebelum `\n` (bukan sebelum `\r\n`)
-  dan `.` menangkap `\r` (komentar `SearchEngine.cs:75-77`). Pola regex dari pengguna dijalankan di UI thread; pola lambat membekukan
-  aplikasi (komentar `SearchEngine.cs:22-23`).
-- **Keputusan.** `NormalizeLineEndings` menulis ulang pola: di luar kelas karakter, escape, dan komentar `(?#...)`, `$` menjadi
-  `(?=\r?$)` dan `.` menjadi `[^\r\n]`. Flag inline `s` (titik menangkap baris baru) dihormati sesuai cakupan grup (`(?s)`, `(?s:...)`,
-  `(?-s)`); pola dengan flag `x` dibiarkan utuh. Subtraksi kelas `-[` dikenali; `[` lain di dalam kelas literal. Pembatasan:
-  `RegexTimeout` 2 dtk per pemanggilan `Match`, `DefaultTotalTimeout` 4 dtk untuk satu pencarian (diperiksa pada **setiap** iterasi,
-  karena satu `NextMatch` bisa memakan 2 dtk), `MaxResults` 20.000 untuk penanda (Ganti Semua memakai `int.MaxValue`). Pola yang kena
-  batas waktu disimpan sebagai `timedOutKey` di `FindReplaceBar` dan tidak dijalankan ulang otomatis (tiap perubahan teks/Cari
-  Berikutnya akan membekukan UI lagi) sampai pola atau opsi berubah. Input kolom cari didebounce 250 ms.
-- **Konsekuensi.** Pola mode `x` tidak sadar-CRLF. Pola yang berakhir dengan backslash menjadi "Regex tidak valid" (bukan crash).
-  Pembekuan UI sampai ~4 dtk (+ hingga 2 dtk untuk satu match) tetap mungkin karena sinkron.
-- **Bukti.** `SearchEngine.cs:14-265`, `FindReplaceBar.xaml.cs:28-30, 155-199`. Test: `SearchEngineEdgeCaseTests`
-  (`IoAndUtilityCoverageTests.cs:864-1069`), `SearchEngineFindTests` (`SearchEngineTests.cs`), `TimedOutPattern_IsNotRerun*`
-  (`DocumentViewLifecycleTests.cs:213`).
+- **Context.** Windows documents use CRLF. With `RegexOptions.Multiline`, `$` only matches before `\n` (not before `\r\n`), and `.` matches `\r` (comment `SearchEngine.cs:75-77`). User regex patterns run on the UI thread; a slow pattern freezes the application (comment `SearchEngine.cs:22-23`).
+- **Decision.** `NormalizeLineEndings` rewrites the pattern: outside character classes, escapes, and `(?#...)` comments, `$` becomes `(?=\r?$)` and `.` becomes `[^\r\n]`. The inline `s` flag (dot matches newlines) is honored according to group scope (`(?s)`, `(?s:...)`, `(?-s)`); patterns with the `x` flag are left intact. Class subtraction `-[` is recognized; any other `[` inside a class is literal. Limits: `RegexTimeout` 2 s per `Match` call, `DefaultTotalTimeout` 4 s for one search (checked on **every** iteration, because a single `NextMatch` can take 2 s), `MaxResults` 20,000 for markers (`Replace All` (Ganti Semua) uses `int.MaxValue`). A pattern that hits the time limit is stored as `timedOutKey` in `FindReplaceBar` and is not re-run automatically (each text change or `Find Next` (Cari Berikutnya) would freeze the UI again) until the pattern or options change. The find input is debounced by 250 ms.
+- **Consequences.** Patterns in `x` mode are not CRLF-aware. A pattern ending in a backslash becomes `Regex tidak valid` (Invalid regex) rather than a crash. A UI freeze of up to ~4 s (+ up to 2 s for one match) remains possible because it is synchronous.
+- **Evidence.** `SearchEngine.cs:14-265`, `FindReplaceBar.xaml.cs:28-30, 155-199`. Tests: `SearchEngineEdgeCaseTests` (`IoAndUtilityCoverageTests.cs:864-1069`), `SearchEngineFindTests` (`SearchEngineTests.cs`), `TimedOutPattern_IsNotRerun*` (`DocumentViewLifecycleTests.cs:213`).
 
-## ADR-11 `CrashLog` dan `IsRecoverable`
+## ADR-11 `CrashLog` and `IsRecoverable`
 
-- **Konteks.** Galat tak tertangani harus dicatat dan ditampilkan ramah (CLAUDE.md), tetapi melanjutkan setelah keadaan program
-  rusak berbahaya (komentar `CrashLog.cs:51-56`).
-- **Keputusan.** `IsRecoverable` adalah allowlist tipe: `IOException`, `UnauthorizedAccessException`, `NotSupportedException`,
-  `Win32Exception`, `RegexMatchTimeoutException`, `FormatException`, `UriFormatException`; `COMException` hanya untuk HRESULT yang
-  dikenal (clipboard `0x800401D0-D5`, WIC `0x88982F00-FF`). Selain itu (OOM, `NullReferenceException`, `InvalidOperationException`,
-  `ArgumentException`, dst.) fatal: sesi disimpan lewat `TrySaveSession`, dialog galat tampil, `e.Handled = false` agar runtime
-  mengakhiri proses. Galat yang dipulihkan menampilkan dialog sekali per jenis+pesan dalam 10 dtk (`ShouldShowDialog`), tetapi tetap
-  dicatat. `ExternalChangeException` adalah turunan `IOException`, jadi `IsRecoverable` bernilai true dan `MainWindow` menampilkannya sebagai galat
-  I/O biasa (komentar test `DocumentTabConflictEdgeTests.cs:71`). Log: tidak pernah melempar, kunci `lock`,
-  stempel waktu `InvariantCulture`, batas 512 KB.
-- **Konsekuensi.** Bug kecil bertipe `InvalidOperationException`/`NullReferenceException` di jalur UI menutup aplikasi (tab yang
-  belum disimpan hilang: hanya path/mode/caret yang masuk sesi). Perilaku "dipangkas otomatis" di README sebenarnya: bila log sudah
-  lebih besar dari 512 KB, **seluruh** file dihapus lalu entri baru ditulis (`CrashLog.cs:37`; test `Write_LogOneByteOverTheLimit_IsDiscarded_*`).
-- **Bukti.** `CrashLog.cs`, `App.xaml.cs:66-104`. Test: `CrashLogTests` (`CrashLogTests.cs`), `CrashLogLimitsTests`
-  (`IoAndUtilityCoverageTests.cs:466-658`). Test dialihkan dari log asli oleh `TestLogRedirect` (`[ModuleInitializer]`).
-  `App.OnDispatcherUnhandledException` sendiri tidak diuji.
+- **Context.** Unhandled errors must be logged and shown gracefully (CLAUDE.md), but continuing after the program state has been corrupted is dangerous (comment `CrashLog.cs:51-56`).
+- **Decision.** `IsRecoverable` is a type allowlist: `IOException`, `UnauthorizedAccessException`, `NotSupportedException`, `Win32Exception`, `RegexMatchTimeoutException`, `FormatException`, `UriFormatException`; `COMException` only for known HRESULTs (clipboard `0x800401D0-D5`, WIC `0x88982F00-FF`). Everything else (OOM, `NullReferenceException`, `InvalidOperationException`, `ArgumentException`, etc.) is fatal: the session is saved via `TrySaveSession`, an error dialog is shown, and `e.Handled = false` so that the runtime terminates the process. A recovered error shows a dialog once per type+message within 10 s (`ShouldShowDialog`), but is still logged. `ExternalChangeException` derives from `IOException`, so `IsRecoverable` is true and `MainWindow` shows it as an ordinary I/O error (test comment `DocumentTabConflictEdgeTests.cs:71`). Log: never throws, uses a `lock`, timestamps with `InvariantCulture`, 512 KB limit.
+- **Consequences.** A small bug of type `InvalidOperationException`/`NullReferenceException` on the UI path closes the application (unsaved tabs are lost: only the path/mode/caret enter the session). The "automatically trimmed" behavior in the README is in fact this: if the log is already larger than 512 KB, the **entire** file is deleted and the new entry is then written (`CrashLog.cs:37`; test `Write_LogOneByteOverTheLimit_IsDiscarded_*`).
+- **Evidence.** `CrashLog.cs`, `App.xaml.cs:66-104`. Tests: `CrashLogTests` (`CrashLogTests.cs`), `CrashLogLimitsTests` (`IoAndUtilityCoverageTests.cs:466-658`). Tests are redirected away from the real log by `TestLogRedirect` (`[ModuleInitializer]`). `App.OnDispatcherUnhandledException` itself is not tested.
 
-## ADR-12 Tema lewat `ResourceDictionary`
+## ADR-12 Theme via `ResourceDictionary`
 
-- **Konteks.** Pergantian tema (Terang/Gelap/Ikuti Sistem) harus berlaku seketika tanpa memuat ulang jendela.
-- **Keputusan.** `Themes/Light.xaml` dan `Dark.xaml` memuat 43 brush semantik dengan kunci **identik** (komentar di kedua berkas); semua
-  gaya di `Controls.xaml`/`Preview.xaml` memakai `DynamicResource`. `ThemeManager.Apply` menukar kamus di `Application.Resources
-  .MergedDictionaries` pada indeks yang sama (tidak menumpuk), memanggil `EditorTheme.ApplyMarkdownHighlighting`, menyesuaikan title
-  bar (`DwmSetWindowAttribute` dengan konstanta `DwmUseImmersiveDarkMode` = 20, `Theming.cs:19`), lalu memicu `ThemeChanged`. Properti AvalonEdit yang bukan dependency property biasa
-  diikat lewat `SetResourceReference`/`RefreshTheme`. Warna highlighting dijaga kontras >= 4,5:1 terhadap `EditorBackgroundBrush`
-  (`EnsureContrast`, arah dipilih berdasarkan kontras yang dapat dicapai, bukan luminansi 0,5). Cetak memuat kamus Terang sendiri
-  (`ThemeManager.LoadDictionary(dark: false)`) agar kertas putih. Mode `System` membaca HKCU `...\Themes\Personalize\AppsUseLightTheme`
-  dan mendengarkan `SystemEvents.UserPreferenceChanged`; `Apply` dipanggil di konstruktor `MainWindow` **sebelum** `InitializeComponent`
-  agar `DynamicResource` langsung menemukan brush.
-- **Konsekuensi.** Tidak ada test yang memeriksa kesamaan kunci Light/Dark (hanya komentar); kunci yang hilang di salah satu kamus
-  baru ketahuan saat dijalankan. Lihat [CONTRIBUTING.md](CONTRIBUTING.md#menambah-temakunci-brush-baru) untuk cara memeriksanya.
-- **Bukti.** `Theming.cs`, `EditorTheme.cs`, `Themes/*.xaml`, `MainWindow.xaml.cs:40`. Test: `ThemeManagerApplyTests`
-  (`DocumentTabTests.cs:1051-1148`, menukar kamus pada `Application` bersama), `EditorThemeContrastTests` (`SmallUtilityTests.cs:249`),
-  `ThemeManagerPureTests` (`:199`).
+- **Context.** Switching the theme (`Terang`/`Gelap`/`Ikuti Sistem`, i.e. Light/Dark/Follow System) must take effect immediately without reloading the window.
+- **Decision.** `Themes/Light.xaml` and `Dark.xaml` contain 43 semantic brushes with **identical** keys (comments in both files); all styles in `Controls.xaml`/`Preview.xaml` use `DynamicResource`. `ThemeManager.Apply` swaps the dictionary in `Application.Resources.MergedDictionaries` at the same index (it does not stack), calls `EditorTheme.ApplyMarkdownHighlighting`, adjusts the title bar (`DwmSetWindowAttribute` with the constant `DwmUseImmersiveDarkMode` = 20, `Theming.cs:19`), then raises `ThemeChanged`. AvalonEdit properties that are not plain dependency properties are bound via `SetResourceReference`/`RefreshTheme`. Highlight colors are kept at a contrast of >= 4.5:1 against `EditorBackgroundBrush` (`EnsureContrast`; the direction is chosen by the achievable contrast, not a 0.5 luminance threshold). Printing loads its own Light dictionary (`ThemeManager.LoadDictionary(dark: false)`) so that the paper is white. Mode `System` reads HKCU `...\Themes\Personalize\AppsUseLightTheme` and listens to `SystemEvents.UserPreferenceChanged`; `Apply` is called in the `MainWindow` constructor **before** `InitializeComponent`, so that `DynamicResource` finds the brushes immediately.
+- **Consequences.** No test checks that the Light and Dark keys match (comments only); a key missing from one of the dictionaries is only discovered at runtime. See [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-themebrush-key) for how to check.
+- **Evidence.** `Theming.cs`, `EditorTheme.cs`, `Themes/*.xaml`, `MainWindow.xaml.cs:40`. Tests: `ThemeManagerApplyTests` (`DocumentTabTests.cs:1051-1148`, swaps dictionaries on the shared `Application`), `EditorThemeContrastTests` (`SmallUtilityTests.cs:249`), `ThemeManagerPureTests` (`:199`).
 
-## ADR-13 Nama `AppThemeMode`
+## ADR-13 `AppThemeMode` name
 
-- **Konteks.** Enum pilihan tema bernama `AppThemeMode { System, Light, Dark }` (`Theming.cs:9`).
-- **Keputusan.** Alasan pemilihan nama **tidak tercatat** di kode, komentar, test, README, maupun riwayat git. Dugaan, belum
-  diverifikasi: awalan `App` menghindari bentrok/ambigu dengan tipe bawaan WPF (sejak .NET 9) bernama `ThemeMode`.
-- **Fakta yang terbukti dari kode.** Nilai disimpan sebagai **teks** di `AppSettings.Theme` (komentar `AppSettings.cs:40`: "agar nilai
-  tak dikenal tidak merusak seluruh file"); `ThemeManager.Parse` tidak peka huruf besar-kecil dan nilai tak dikenal/kosong/angka menjadi
-  `System`; `Sanitize` menormalkan saat `Load`. Hal yang sama berlaku untuk `SessionTab.Mode` (`ViewMode`). Konsekuensinya: mengganti
-  nama anggota enum yang tersimpan (mis. `Dark`) akan membuat pengaturan lama jatuh ke default tanpa error.
-- **Bukti.** `Theming.cs:9, 33-34`, `AppSettings.cs:40-41, 53, 128-131`. Test: `Parse_KnownNamesIgnoringCase_ElseSystem`
-  (`SmallUtilityTests.cs:216`), `Load_Theme_IsNormalizedToKnownName` (`AppSettingsTests.cs:127`).
+- **Context.** The enum for the theme choice is named `AppThemeMode { System, Light, Dark }` (`Theming.cs:9`).
+- **Decision.** The reason for choosing this name is **not recorded** in code, comments, tests, README, or git history. Unverified assumption: the `App` prefix avoids a clash/ambiguity with the WPF built-in type named `ThemeMode` (since .NET 9).
+- **Facts established from the code.** The value is stored as **text** in `AppSettings.Theme` (comment `AppSettings.cs:40`: "so that an unknown value does not break the whole file"); `ThemeManager.Parse` is case-insensitive, and unknown/empty/numeric values become `System`; `Sanitize` normalizes on `Load`. The same applies to `SessionTab.Mode` (`ViewMode`). Consequence: renaming a stored enum member (e.g. `Dark`) makes old settings fall back to the default without any error.
+- **Evidence.** `Theming.cs:9, 33-34`, `AppSettings.cs:40-41, 53, 128-131`. Tests: `Parse_KnownNamesIgnoringCase_ElseSystem` (`SmallUtilityTests.cs:216`), `Load_Theme_IsNormalizedToKnownName` (`AppSettingsTests.cs:127`).
 
-## ADR-14 Render pratinjau: debounce, parse latar, dan generation check
+## ADR-14 Preview rendering: debounce, background parse, and generation check
 
-- **Konteks.** Mengetik harus tetap lancar pada dokumen besar (komentar `DocumentView.xaml.cs:22`).
-- **Keputusan.** Debounce `renderTimer` 250 ms, naik ke 800 ms (>= 200 rb karakter) dan 1500 ms (>= 1 juta). Statistik kata
-  dihitung lebih jarang (300 ms; 2000 ms dari 1 juta) dan per potongan 64 KB tanpa menyalin string utuh. Render dilewati bila
-  `Document.Version` sama dengan render terakhir (tanpa menyalin teks) atau teks sama dengan `lastRenderedText` (mis. setelah Undo). Dokumen
-  >= 100 rb karakter di-parse di thread latar; `renderGeneration` membuang hasil basi (render lebih baru atau tab ditutup).
-  `FlowDocument` tetap dibuat di UI thread (wajib). Scroll dipertahankan setelah render; mode Terpisah mengikuti posisi editor secara
-  proporsional dengan penanda "expected offset" untuk memutus umpan balik. Hanya dilakukan bila pratinjau tampak.
-- **Konsekuensi.** README menyederhanakan ambang sebagai "di atas 1 MB"; kode memakai ambang karakter berjenjang (100 rb, 200 rb,
-  1 juta). Pembuatan `FlowDocument` dokumen sangat besar tetap membekukan UI; pengukuran kemudian menunjukkan "sesaat" bisa
-  berarti sekitar 8 detik (200 KB), 16 detik (500 KB), sampai lebih dari 5 menit (1,5 MB), karena WPF menata satu `FlowDocument` raksasa secara superlinear
-  (angka: README, Batasan yang diketahui). Parse latar tidak mengurangi bagian ini; bahwa penataan berjalan di UI thread adalah
-  inferensi dari UI yang tak merespons, belum diverifikasi lebih jauh.
-- **Bukti.** `DocumentView.xaml.cs:22-29, 97-108, 332-452`. Test: `StaleBackgroundRender_NeverReplacesTheNewerRender`
-  (`DocumentViewLifecycleTests.cs:333`), `BackgroundRender_AfterDispose_*` (`:359`), `BackgroundRender_LargeDocument*` (`:395`).
-  Sinkron scroll dan lompat `#anchor` tidak diuji.
+- **Context.** Typing must stay responsive on large documents (comment `DocumentView.xaml.cs:22`).
+- **Decision.** Debounce of `renderTimer` is 250 ms, increased to 800 ms (>= 200k characters) and 1500 ms (>= 1 million). Word statistics are computed less often (300 ms; 2000 ms from 1 million) and per 64 KB chunk without copying the whole string. A render is skipped if `Document.Version` equals the last render (without copying the text), or if the text equals `lastRenderedText` (e.g. after Undo). Documents >= 100k characters are parsed on a background thread; `renderGeneration` discards stale results (a newer render exists, or the tab was closed). The `FlowDocument` is still created on the UI thread (mandatory). Scroll position is preserved after rendering; in `Terpisah` (Split) mode, the preview follows the editor position proportionally, with an "expected offset" marker to break the feedback loop. This is only done while the preview is visible.
+- **Consequences.** The README simplifies the threshold to "above 1 MB"; the code uses tiered character thresholds (100k, 200k, 1 million). Creating the `FlowDocument` of very large documents still freezes the UI; measurements show that a "momentary" freeze can mean about 8 seconds (200 KB), 16 seconds (500 KB), or more than 5 minutes (1.5 MB), because WPF lays out a single huge `FlowDocument` superlinearly (figures: README, known limitations). The background parse does not reduce this part; that the layout runs on the UI thread is an inference from the unresponsive UI, not verified further.
+- **Evidence.** `DocumentView.xaml.cs:22-29, 97-108, 332-452`. Tests: `StaleBackgroundRender_NeverReplacesTheNewerRender` (`DocumentViewLifecycleTests.cs:333`), `BackgroundRender_AfterDispose_*` (`:359`), `BackgroundRender_LargeDocument*` (`:395`). Synchronized scrolling and `#anchor` jumps are not tested.
 
-## ADR-15 Pengaturan tidak pernah melempar dan digabung saat simpan
+## ADR-15 Settings never throw, and are merged on save
 
-- **Konteks.** Beberapa instance bisa berjalan (mis. beda sesi Windows atau bila pipe gagal) dan `settings.json` bisa diedit tangan
-  atau rusak (komentar `AppSettings.cs:127`, README).
-- **Keputusan.** `Load` dan `Save` menangkap galat I/O/JSON dan mengembalikan bawaan/`false`; tipe salah pada satu properti
-  membuat seluruh file jatuh ke bawaan. `Sanitize` membuang entri tak masuk akal (path kosong, duplikat, zoom di luar 50-300,
-  indeks aktif di luar rentang). `SaveMerged` memuat ulang file lebih dulu dan menggabungkan `RecentFiles` (milik instance ini di
-  depan, sisanya dari file, maksimal 10, tanpa membedakan huruf besar-kecil, melewatkan yang sengaja dihapus lewat `removedRecent`)
-  supaya salinan usang tidak menimpa instance lain. Hanya `RecentFiles` yang digabung; tema/zoom/blokir gambar diambil dari instance
-  yang menyimpan terakhir.
-- **Konsekuensi.** File yang rusak ditimpa diam-diam oleh `SaveMerged` berikutnya (test `SaveMerged_CorruptStoredFile_IsReplacedByOwnSettings`).
-  Tidak ada penguncian antar-proses: dua instance yang menyimpan bersamaan tetap bisa saling menimpa antara `Load` dan `Save`
-  (inferensi dari kode, tidak diuji).
-- **Bukti.** `AppSettings.cs:61-145`. Test: `AppSettingsTests` (40 test), `AppSettingsMergeTests`, `AppSettingsMergeEdgeTests`.
+- **Context.** Several instances may run at once (e.g. different Windows sessions, or when the pipe fails), and `settings.json` may be edited by hand or be corrupt (comment `AppSettings.cs:127`, README).
+- **Decision.** `Load` and `Save` catch I/O/JSON errors and return the defaults or `false`; a wrong type in one property makes the whole file fall back to defaults. `Sanitize` discards nonsensical entries (empty path, duplicates, zoom outside 50-300, active index out of range). `SaveMerged` reloads the file first and merges `RecentFiles` (this instance's entries first, the rest from the file, at most 10, case-insensitive, skipping entries deliberately removed via `removedRecent`), so that a stale copy does not overwrite other instances. Only `RecentFiles` is merged; theme/zoom/image blocking are taken from the instance that saved last.
+- **Consequences.** A corrupt file is silently overwritten by the next `SaveMerged` (test `SaveMerged_CorruptStoredFile_IsReplacedByOwnSettings`). There is no inter-process locking: two instances saving at the same time can still overwrite each other between `Load` and `Save` (inferred from the code, not tested).
+- **Evidence.** `AppSettings.cs:61-145`. Tests: `AppSettingsTests` (40 tests), `AppSettingsMergeTests`, `AppSettingsMergeEdgeTests`.
 
-## ADR-16 Pembukaan dokumen hanya lewat `OpenFile`, dengan batas ukuran
+## ADR-16 Documents opened only via `OpenFile`, with size limits
 
-- **Konteks.** Seluruh file dibaca ke memori lalu didekode (komentar `MainWindow.xaml.cs:19, 279`).
-- **Keputusan.** `MainWindow.OpenFile` adalah satu-satunya pintu: `GetFullPath`, deteksi tab ganda (tab yang sudah ada dipilih), konfirmasi
-  > 50 MB, tolak > 500 MB, tangkap `OutOfMemoryException` dan `IOException`/`UnauthorizedAccessException` dengan pesan ramah.
-- **Konsekuensi.** `OpenFile` tidak memeriksa ekstensi; penyaringan ekstensi ada di seret-lepas, klik tautan, dan filter dialog
-  (`MarkdownFiles.IsMarkdown` juga menyertakan `.txt`). Batas ukuran dan jalur OOM tidak diuji otomatis.
-- **Bukti.** `MainWindow.xaml.cs:20-21, 238-306`.
+- **Context.** The whole file is read into memory and then decoded (comments `MainWindow.xaml.cs:19, 279`).
+- **Decision.** `MainWindow.OpenFile` is the single entry point: `GetFullPath`, duplicate-tab detection (the existing tab is selected), confirmation for > 50 MB, rejection for > 500 MB, and catching of `OutOfMemoryException` and `IOException`/`UnauthorizedAccessException` with a friendly message.
+- **Consequences.** `OpenFile` does not check the extension; extension filtering is done in drag-and-drop, link clicks, and the dialog filter (`MarkdownFiles.IsMarkdown` also includes `.txt`). The size limits and the OOM path are not tested automatically.
+- **Evidence.** `MainWindow.xaml.cs:20-21, 238-306`.
 
-## ADR-17 Klik tautan di pratinjau
+## ADR-17 Link clicks in preview
 
-- **Konteks.** Komentar `DocumentView.xaml.cs:699-700`: hanya skema aman yang diserahkan ke shell; tautan ke file lokal non-markdown
-  diabaikan "agar dokumen tidak bisa menjalankan file lain di sebelahnya". Versi awal menggabungkan `Path.Combine(baseDir,
-  Uri.UnescapeDataString(url))` lalu memanggil `File.Exists` sebelum cek ekstensi; tautan ter-percent-encode ke UNC
-  (`%5C%5Chost%5Cs%5Cx.md`, `%2F%2Fhost%2Fs%2Fx.md`) memicu koneksi SMB/NTLM dengan satu klik (risiko R1, sekarang ditutup).
-- **Keputusan.** `OnHyperlink`: `#anchor` -> lompat di dokumen yang sama; skema absolut selain `file` -> hanya `http`/`https`/`mailto`
-  ke `Process.Start(UseShellExecute)` (galat shell ditangkap dan dicatat); selain itu path diselesaikan oleh
-  `MarkdownSupport.ResolveLinkTarget` (murni, tanpa I/O): `file:` tanpa host dikonversi lewat `Uri.LocalPath` (berhost ditolak), tautan
-  relatif didekode dan digabung dengan folder dokumen, path perangkat `\\?\`/`\\.\` ditolak, ekstensi harus markdown
-  (`MarkdownFiles.IsMarkdown`), lalu `IsAllowedLocalPath` (UNC hanya di share dokumen sendiri). Hanya bila helper mengembalikan path,
-  `OnHyperlink` memanggil `File.Exists` dan `RequestOpen` (dibuka sebagai tab oleh `MainWindow`, dengan anchor).
-- **Konsekuensi.** Allowlist ini terpisah dari `ClassifyUrl` (yang dipakai ekspor/gambar) tetapi memakai `IsAllowedLocalPath` yang sama
-  dengan gambar pratinjau. Urutan cek (ekstensi dan lokasi sebelum `File.Exists`) adalah bagian dari kontrak keamanan; jangan dibalik.
-  Lihat [SECURITY.md](SECURITY.md#4-risiko-yang-sudah-ditutup) (R1, ditutup) dan [bagian 2.4](SECURITY.md#24-unc-smb-ntlm).
-- **Bukti.** `MarkdownSupport.cs:361-412`, `DocumentView.xaml.cs:673-712`. Test: `LinkResolutionTests.cs` (resolusi path). Pembungkus
-  `OnHyperlink` tidak punya test (hanya `RequestOpen` yang diuji, `DocumentTabTests.cs:274`).
+- **Context.** Comment `DocumentView.xaml.cs:699-700`: only safe schemes are handed to the shell; links to local non-Markdown files are ignored "so that a document cannot run other files next to it". An early version combined `Path.Combine(baseDir, Uri.UnescapeDataString(url))` and then called `File.Exists` before checking the extension; percent-encoded links to UNC (`%5C%5Chost%5Cs%5Cx.md`, `%2F%2Fhost%2Fs%2Fx.md`) triggered an SMB/NTLM connection with one click (risk R1, now closed).
+- **Decision.** `OnHyperlink`: `#anchor` -> jump within the same document; an absolute scheme other than `file` -> only `http`/`https`/`mailto` to `Process.Start(UseShellExecute)` (shell errors are caught and logged); otherwise the path is resolved by `MarkdownSupport.ResolveLinkTarget` (pure, no I/O): `file:` without host is converted via `Uri.LocalPath` (a host is rejected), relative links are decoded and combined with the document folder, device paths `\\?\`/`\\.\` are rejected, the extension must be markdown (`MarkdownFiles.IsMarkdown`), then `IsAllowedLocalPath` (UNC only within the document's own share). Only if the helper returns a path does `OnHyperlink` call `File.Exists` and `RequestOpen` (opened as a tab by `MainWindow`, with the anchor).
+- **Consequences.** This allowlist is separate from `ClassifyUrl` (used by export/images), but it uses the same `IsAllowedLocalPath` as preview images. The order of checks (extension and location before `File.Exists`) is part of the security contract; do not reverse it. See [SECURITY.md](SECURITY.md#4-risks-already-closed) (R1, closed) and [section 2.4](SECURITY.md#24-unc-smb-ntlm).
+- **Evidence.** `MarkdownSupport.cs:361-412`, `DocumentView.xaml.cs:673-712`. Tests: `LinkResolutionTests.cs` (path resolution). The `OnHyperlink` wrapper has no test (only `RequestOpen` is tested, `DocumentTabTests.cs:274`).
 
-## ADR-18 Skrip asosiasi file hanya HKCU
+## ADR-18 File association scripts are HKCU only
 
-- **Konteks.** README: hanya menulis ke HKCU, tanpa hak administrator; Windows 10/11 melindungi pilihan aplikasi bawaan.
-- **Keputusan.** `register-file-association.ps1`/`unregister-file-association.ps1` memakai `SupportsShouldProcess` (`-WhatIf`), menulis
-  lewat `Registry.CurrentUser`, memvalidasi `-Extensions` dengan `'^\.[a-z0-9]+$'` (ekstensi dipakai sebagai nama subkey registri),
-  dan `-SetDefault` mencadangkan nilai bawaan lama ke `HKCU\Software\Makdon\PreviousDefault` yang dipulihkan skrip unregister.
-  Unregister hanya menyentuh nilai bawaan yang persis menunjuk ke ProgID Makdon dan tidak menyentuh `UserChoice`.
-  Unregister juga membersihkan sisa pendaftaran lama dari masa aplikasi ini bernama MdViewer (ProgID `MdViewer.Markdown`,
-  `Applications\MdViewer.exe`, `Software\MdViewer`) dengan aturan yang sama; register tidak membuat kunci lama.
-- **Konsekuensi.** Skrip tidak bisa memaksa Makdon menjadi aplikasi bawaan. Tidak ada test otomatis untuk skrip (CLAUDE.md melarang
-  menjalankan skrip registri sungguhan di test).
-- **Bukti.** `scripts/register-file-association.ps1:37, 68-70, 81-140`, `scripts/unregister-file-association.ps1:20, 36-38, 57-114`.
+- **Context.** README: writes only to HKCU, without administrator rights; Windows 10/11 protects the default application choice.
+- **Decision.** `register-file-association.ps1`/`unregister-file-association.ps1` use `SupportsShouldProcess` (`-WhatIf`), write via `Registry.CurrentUser`, validate `-Extensions` with `'^\.[a-z0-9]+$'` (the extension is used as a registry subkey name), and `-SetDefault` backs up the old default value to `HKCU\Software\Makdon\PreviousDefault`, which the unregister script restores. Unregister only touches a default value that points exactly to the Makdon ProgID and does not touch `UserChoice`. Unregister also cleans up leftover registrations from the time the app was named MdViewer (ProgID `MdViewer.Markdown`, `Applications\MdViewer.exe`, `Software\MdViewer`) using the same rules; register does not create the old keys.
+- **Consequences.** The scripts cannot force Makdon to become the default application. There are no automated tests for the scripts (CLAUDE.md forbids running real registry scripts in tests).
+- **Evidence.** `scripts/register-file-association.ps1:37, 68-70, 81-140`, `scripts/unregister-file-association.ps1:20, 36-38, 57-114`.
 
-## ADR-19 Pratinjau Cetak lewat paket XPS di memori
+## ADR-19 Print Preview via in-memory XPS package
 
-- **Konteks.** Pratinjau Cetak harus memperlihatkan halaman yang persis sama dengan yang tercetak, termasuk kaki halaman "Halaman X dari N"
-  yang butuh N (jumlah halaman akhir) sudah diketahui. Komentar `PreviewBuild.cs:11-15`: `DocumentViewer` "hanya menerima dokumen
-  tetap, bukan `FlowDocument`". Tidak ada test yang membuktikan penolakan itu (klaim perilaku WPF dari komentar; **belum diverifikasi** di
-  repo ini). Alternatif lain yang dipertimbangkan tidak tercatat di kode, komentar, maupun test.
-- **Keputusan.** `PreviewBuild` memaginasi `FlowDocument` cetak di latar, lalu menulis halaman lewat `XpsDocumentWriter.WriteAsync` ke paket
-  XPS di `MemoryStream` (didaftarkan di `PackageStore`, URI `pack://makdon-preview-N.xps`) dan menyerahkan `FixedDocumentSequence` ke
-  `DocumentViewer` (`PreviewBuild.cs:152-171, 198`). Yang ditulis adalah `HeaderFooterPaginator` di atas paginator FlowDocument, yaitu
-  paginator yang sama dengan jalur Cetak langsung, jadi "yang tampil sama dengan yang tercetak" (komentar `PreviewBuild.cs:13-15`).
-  `DocumentViewer` baru diisi pada tahap `Ready` (`PrintPreviewWindow.xaml.cs:166-173`), yaitu sesudah paginasi dan penulisan XPS selesai
-  (komentar kelas di `:15-16` hanya menyebut "setelah paginasi selesai"). Tombol Cetak mencetak paket yang sama
-  (`build.Pages.DocumentPaginator`), bukan hasil penyusunan ulang.
-- **Konsekuensi.** Siklus hidup paket menjadi rumit dan wajib dikelola ([ADR-25](#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle)).
-  Halaman pratinjau berukuran tetap, jadi kertas/orientasi tidak bisa diubah sesudah penulisan ([ADR-22](#adr-22-pratinjau-punya-pengaturan-kertas-sendiri-dan-konfirmasi-bila-dialog-cetak-berbeda)).
-  Tiap perubahan layout atau kaki halaman menulis ulang seluruh paket. Keterbatasan yang dicatat penulisnya (`PreviewBuild.cs:23-25`): gambar
-  `http(s)` (bila blokir remote dimatikan) dimuat async oleh WPF dan bisa belum terunduh saat halaman dibekukan di XPS, sehingga tampil
-  kosong; gambar lokal tidak terpengaruh. Seluruh halaman tinggal di memori selama jendela terbuka (ukurannya untuk dokumen besar tidak diukur).
-- **Bukti.** `PreviewBuild.cs`, `PrintPreviewWindow.xaml.cs:103-177, 446-447`. Test: `PreviewBuild_ProducesFixedPagesMatchingThePaginator_*`
-  (`PrintPreviewTests.cs:298`), `XpsPages_CarryDocumentNameAndPageXOfN_WhenFooterIsOn`, `XpsPages_HaveTheLayoutPageSize`
-  (`PreviewBuildTests.cs:45, 86`). Pencetakan nyata dari paket (`dialog.PrintDocument`) tidak teruji ([TESTING.md](TESTING.md#yang-tidak-teruji)).
+- **Context.** Print Preview must show exactly the pages that will be printed, including the footer "Page X of N" (`Halaman X dari N`), which needs N (the final page count) to be known. Comment `PreviewBuild.cs:11-15`: `DocumentViewer` "only accepts fixed documents, not `FlowDocument`". No test proves that rejection (a WPF behavior claim from the comment; **not verified** in this repo). Other alternatives considered are not recorded in code, comments, or tests.
+- **Decision.** `PreviewBuild` paginates the print `FlowDocument` in the background, then writes the pages via `XpsDocumentWriter.WriteAsync` to an XPS package in a `MemoryStream` (registered in `PackageStore`, URI `pack://makdon-preview-N.xps`), and hands the `FixedDocumentSequence` to `DocumentViewer` (`PreviewBuild.cs:152-171, 198`). What is written is `HeaderFooterPaginator` on top of the FlowDocument paginator, which is the same paginator as the direct print path, so "what is displayed is what is printed" (comment `PreviewBuild.cs:13-15`). `DocumentViewer` is only filled in the `Ready` stage (`PrintPreviewWindow.xaml.cs:166-173`), that is, after pagination and XPS writing have completed (the class comment at `:15-16` only mentions "after pagination is complete"). The Print button prints the same package (`build.Pages.DocumentPaginator`), not a re-layout.
+- **Consequences.** The package lifecycle becomes complex and must be managed ([ADR-25](#adr-25-preview-errors-wrapped-in-guard-and-xps-package-cleaned-up-after-idle)). Preview pages have a fixed size, so paper/orientation cannot be changed after writing ([ADR-22](#adr-22-preview-has-its-own-paper-settings-and-confirmation-when-the-print-dialog-differs)). Every change to layout or footer rewrites the whole package. A limitation noted by the author (`PreviewBuild.cs:23-25`): `http(s)` images (when remote blocking is turned off) are loaded asynchronously by WPF and may not have been downloaded yet when the pages are frozen into XPS, so they appear empty; local images are not affected. All pages stay in memory while the window is open (their size for large documents is not measured).
+- **Evidence.** `PreviewBuild.cs`, `PrintPreviewWindow.xaml.cs:103-177, 446-447`. Tests: `PreviewBuild_ProducesFixedPagesMatchingThePaginator_*` (`PrintPreviewTests.cs:298`), `XpsPages_CarryDocumentNameAndPageXOfN_WhenFooterIsOn`, `XpsPages_HaveTheLayoutPageSize` (`PreviewBuildTests.cs:45, 86`). Actual printing from the package (`dialog.PrintDocument`) is not tested ([TESTING.md](TESTING.md#not-tested)).
 
-## ADR-20 Snapshot saat pratinjau dibuka dan parse yang dipakai bersama
+## ADR-20 Snapshot when preview opens, and shared parse
 
-- **Konteks.** Komentar `PrintLayout.cs:14-17`: snapshot "diambil sekali saat pratinjau dibuka sehingga penyuntingan sesudahnya tidak
-  mengubah pratinjau, dan editor tidak terkunci". Komentar `MainWindow.xaml.cs:765`: jendela modal, jadi editor tidak bisa berubah selama
-  terbuka. Dokumen besar tidak boleh membekukan UI saat pratinjau dibuka (komentar `PrintLayout.cs:82-87`).
-- **Keputusan.** `DocumentView.CapturePrintSnapshot` menyalin teks, folder dokumen, `BlockRemoteImages`, dan judul (`PrintSnapshot`).
-  `PrintPreviewWindow` membuat satu `PrintSource` yang mem-parse sekali (sinkron di bawah `BackgroundParseChars` = 100 rb karakter, selain itu
-  `Task.Run`); ganti kertas/margin/orientasi/kaki halaman hanya membuat `FlowDocument` baru dari AST yang sama. AST dipakai bersama antarsiklus
-  karena renderer hanya membacanya; satu-satunya yang mengubahnya adalah `ReplaceUnloadableImages` pada jalur galat, yang hanya jalan di UI
-  thread dan idempoten (komentar `PrintLayout.cs:86-88`, `DocumentView.xaml.cs:594-595`). Flag blokir remote diambil dari snapshot, bukan dari
-  nilai global saat penyusunan ulang. Parse latar tidak dibatalkan saat jendela ditutup: Markdig tak punya titik pembatalan, token hanya
-  mencegah tugas yang belum mulai (komentar `PrintLayout.cs:89-90`).
-- **Konsekuensi.** Pratinjau bisa berbeda dari isi tab bila tab berubah lewat jalur lain sesudahnya (mis. dimuat ulang oleh perubahan
-  eksternal); judul dan folder gambar tetap yang lama walau tab disimpan ke path lain atau ditutup. Parse latar yang sudah berjalan
-  terus memakai CPU sampai selesai.
-- **Bukti.** `PrintLayout.cs:14-18, 82-125`, `DocumentView.xaml.cs:585-596`, `PrintPreviewWindow.xaml.cs:45-52`. Test:
-  `Snapshot_IsNotAffectedByLaterEditorChanges` (`PrintPreviewTests.cs:218`), `Snapshot_ClosingTheTabAfterOpeningThePreview_*` dan
-  `Snapshot_ChangingTheFilePathAfterOpening_*` (`PrintPreviewWindowBehaviorTests.cs:1048, 1075`), `SnapshotBlockRemoteFlag_IsHonoured_*`
-  (`PrintContentAndCommandTests.cs:264`), `TwoBuildsFromOneSource_ShareTheParse_*` dan `LargeDocument_*` (`PreviewBuildTests.cs:631, 750, 776`),
-  `LargeDocument_OpensWithoutBlocking_AndLayoutChangesReuseTheParse` (`PrintPreviewWindowBehaviorTests.cs:1005`).
+- **Context.** Comment `PrintLayout.cs:14-17`: the snapshot is "taken once when the preview opens, so that later edits do not change the preview, and the editor is not locked". Comment `MainWindow.xaml.cs:765`: the window is modal, so the editor cannot change while it is open. A large document must not freeze the UI when the preview opens (comment `PrintLayout.cs:82-87`).
+- **Decision.** `DocumentView.CapturePrintSnapshot` copies the text, the document folder, `BlockRemoteImages`, and the title (`PrintSnapshot`). `PrintPreviewWindow` creates one `PrintSource` that parses once (synchronously below `BackgroundParseChars` = 100k characters, otherwise via `Task.Run`); changing paper/margin/orientation/footer only creates a new `FlowDocument` from the same AST. The AST is shared across cycles because the renderer only reads it; the only thing that changes it is `ReplaceUnloadableImages` on the error path, which only runs on the UI thread and is idempotent (comments `PrintLayout.cs:86-88`, `DocumentView.xaml.cs:594-595`). The remote-blocking flag is taken from the snapshot, not from the global value at the time of re-layout. The background parse is not cancelled when the window closes: Markdig has no cancellation points, and the token only prevents tasks that have not yet started (comment `PrintLayout.cs:89-90`).
+- **Consequences.** The preview can differ from the tab's content if the tab changes through another path afterwards (e.g. reloaded by an external change); the title and image folder remain the old ones even if the tab is saved to another path or closed. A background parse that has already started keeps using CPU until it finishes.
+- **Evidence.** `PrintLayout.cs:14-18, 82-125`, `DocumentView.xaml.cs:585-596`, `PrintPreviewWindow.xaml.cs:45-52`. Tests: `Snapshot_IsNotAffectedByLaterEditorChanges` (`PrintPreviewTests.cs:218`), `Snapshot_ClosingTheTabAfterOpeningThePreview_*` and `Snapshot_ChangingTheFilePathAfterOpening_*` (`PrintPreviewWindowBehaviorTests.cs:1048, 1075`), `SnapshotBlockRemoteFlag_IsHonoured_*` (`PrintContentAndCommandTests.cs:264`), `TwoBuildsFromOneSource_ShareTheParse_*` and `LargeDocument_*` (`PreviewBuildTests.cs:631, 750, 776`), `LargeDocument_OpensWithoutBlocking_AndLayoutChangesReuseTheParse` (`PrintPreviewWindowBehaviorTests.cs:1005`).
 
-## ADR-21 Kaki halaman di dalam margin bawah
+## ADR-21 Page footer inside the bottom margin
 
-- **Konteks.** Cetak dan pratinjau perlu nama dokumen dan nomor halaman, tetapi menambah kaki tidak boleh mengubah paginasi isi (jumlah dan
-  isi halaman harus sama dengan atau tanpa kaki). Komentar `HeaderFooterPaginator.cs:80-84`: margin Sempit menaruh teks sekitar 17 DIP dari tepi
-  kertas, di dalam zona yang tak bisa dicetak banyak printer.
-- **Keputusan.** `HeaderFooterPaginator` membungkus paginator FlowDocument dan menggambar kaki (nama dokumen di kiri, dipotong dengan elipsis
-  pada satu baris; "Halaman X dari N" di kanan; Segoe UI 10, abu-abu) di dalam margin bawah. Posisi: di tengah margin bawah, tetapi tidak lebih
-  dekat dari 0,25 inci (`MinFooterEdgeDistance` = 24 DIP) ke tepi kertas, dan tidak pernah keluar dari margin bawah. Bila jumlah halaman
-  belum diketahui hanya "Halaman X". Hanya kaki yang ada (tidak ada kepala halaman, walau namanya `HeaderFooterPaginator`). Cetak langsung
-  (Ctrl+P) selalu memakai kaki (`headerFooter: true`, `MainWindow.xaml.cs:756`); di pratinjau bisa dimatikan lewat kotak "Nama dan nomor halaman".
-- **Konsekuensi.** Untuk margin yang sangat kecil (kurang dari 24 DIP ditambah tinggi teks) teks tetap di dalam margin dan bisa lebih dekat dari
-  0,25 inci ke tepi (komentar kode: "tetap di dalam margin bawah ... untuk margin yang sangat kecil"). Ketiga preset margin memenuhi batas itu.
-  Kaki ikut Ctrl+P, jadi cetak langsung kini berbeda dari versi sebelum fitur ini (lihat [CHANGELOG](../CHANGELOG.md)).
-  Warna dan font kaki ditulis tetap di kode (`HeaderFooterPaginator.cs:17-27`), tidak mengikuti tema.
-- **Bukti.** `HeaderFooterPaginator.cs:14-92`. Test (`HeaderFooterPaginatorTests.cs`): `Footer_DoesNotEnterTheContentArea_SoBodyTextIsNotMovedByIt` (`:74`),
-  `PageCount_IsTheSameWithAndWithoutFooter_AndAsTheBasePaginator` (`:58`), `Footer_IsDrawnInsideTheBottomMargin` (`:307`),
-  `Footer_StaysAtLeastAQuarterInchFromThePaperEdge_ForEveryRealMarginPreset` (`:325`), `VeryLongName_IsTrimmedToOneLine_*` (`:275`),
-  `OddDocumentNames_*` (`:258`, 15 nama aneh), `Footer_WhenCountIsNotYetKnown_ShowsOnlyThePageNumber` (`:219`).
+- **Context.** Print and preview need the document name and page number, but adding a footer must not change the body pagination (the number and content of pages must be the same with or without the footer). Comment `HeaderFooterPaginator.cs:80-84`: with the Narrow margin, text sits about 17 DIP from the paper edge, inside the non-printable zone of many printers.
+- **Decision.** `HeaderFooterPaginator` wraps the FlowDocument paginator and draws a footer (document name on the left, trimmed with an ellipsis to one line; `Halaman X dari N` (Page X of N) on the right; Segoe UI 10, gray) inside the bottom margin. Position: centered in the bottom margin, but not closer than 0.25 inch (`MinFooterEdgeDistance` = 24 DIP) to the paper edge, and never outside the bottom margin. When the page count is not yet known, only `Halaman X` (Page X) is shown. Only a footer exists (there is no page header, despite the class name `HeaderFooterPaginator`). Direct print (`Cetak`, Print, Ctrl+P) always uses the footer (`headerFooter: true`, `MainWindow.xaml.cs:756`); in the preview it can be turned off with the checkbox `Nama dan nomor halaman` (Document name and page number).
+- **Consequences.** For very small margins (less than 24 DIP plus the text height), the text stays inside the margin and can be closer than 0.25 inch to the edge (code comment: "stays inside the bottom margin ... for very small margins"). The three margin presets satisfy that limit. The footer applies to Ctrl+P, so direct print now differs from the version before this feature (see [CHANGELOG](../CHANGELOG.md)). The footer colors and font are hard-coded in the code (`HeaderFooterPaginator.cs:17-27`) and do not follow the theme.
+- **Evidence.** `HeaderFooterPaginator.cs:14-92`. Tests (`HeaderFooterPaginatorTests.cs`): `Footer_DoesNotEnterTheContentArea_SoBodyTextIsNotMovedByIt` (`:74`), `PageCount_IsTheSameWithAndWithoutFooter_AndAsTheBasePaginator` (`:58`), `Footer_IsDrawnInsideTheBottomMargin` (`:307`), `Footer_StaysAtLeastAQuarterInchFromThePaperEdge_ForEveryRealMarginPreset` (`:325`), `VeryLongName_IsTrimmedToOneLine_*` (`:275`), `OddDocumentNames_*` (`:258`, 15 odd names), `Footer_WhenCountIsNotYetKnown_ShowsOnlyThePageNumber` (`:219`).
 
-## ADR-22 Pratinjau punya pengaturan kertas sendiri dan konfirmasi bila dialog Cetak berbeda
+## ADR-22 Preview has its own paper settings, and confirmation when the Print dialog differs
 
-- **Konteks.** Komentar `PrintPreviewWindow.xaml.cs:462-465`: halaman pratinjau berukuran tetap (XPS). Bila pengguna mengganti kertas atau
-  orientasi di dialog Cetak, pilihannya tidak boleh ditimpa diam-diam dan juga tidak dipaksakan ke printer tanpa tanya; membangun ulang halaman
-  dari pilihan dialog tidak bisa dilakukan di situ (dialog sudah tertutup, dan kertas seperti Legal/A5 tidak punya preset di pratinjau).
-- **Keputusan.** Pratinjau punya pilihan sendiri: Orientasi (Potret/Lanskap), Kertas (A4/Letter), Margin (0,5"/0,75"/1") dan kaki halaman. Sebelum
-  `PrintDialog` tampil, tiketnya disamakan dengan pratinjau (`ApplyTicket(dialog)`, ukuran eksplisit supaya tidak bergantung tabel kertas
-  driver, komentar `:499`). Sesudah dialog diterima, `ConfirmPaperMatchesPreview` membandingkan tiket dengan pratinjau (`TicketMatches`: nama
-  kertas termasuk varian `Rotated`, atau lebar/tinggi dengan toleransi 4 DIP; nilai yang tidak diisi dianggap cocok). Bila beda, `ChoiceDialog`
-  menawarkan "Cetak sesuai pratinjau" atau "Batal" (bawaan: Batal; Esc/X = Batal). "Cetak sesuai pratinjau" menyetel tiket ke kertas dan
-  orientasi pratinjau. Tanpa printer terpasang, `dialog.PrintTicket` melempar dan konfirmasi dilewati (dialog Cetak sendiri yang melaporkan).
-  Nama kertas yang ditampilkan dipetakan ke nama lazim (`PaperName`), selebihnya nama enum apa adanya.
-- **Konsekuensi.** Pengaturan pratinjau tidak disimpan antarpembukaan (bawaan A4, potret, Normal). Cetak dengan kertas selain A4/Letter hanya
-  bisa dengan ukuran pratinjau. Cetak langsung (Ctrl+P) berlawanan: ukuran halaman diambil dari dialog (`PageLayout.FromPrintableArea`).
-  Bahwa mengubah objek `dialog.PrintTicket` benar-benar dipakai saat `PrintDocument` **belum diverifikasi** (test hanya memeriksa `ApplyTicket`
-  pada `PrintTicket` terpisah).
-- **Bukti.** `PrintPreviewWindow.xaml.cs:421-569`, `PrintLayout.cs:54-65`. Test: `ApplyTicket_*`, `TicketMatches_*`, `DescribeTicket_*`
-  (`PrintContentAndCommandTests.cs:421-528`). `ConfirmPaperMatchesPreview` sendiri (dengan `ChoiceDialog`) dan pencetakan nyata tidak
-  dijalankan test mana pun; hook `ShowPrintDialogForTests` hanya dipakai dengan hasil "batal" (`PrintPreviewWindowBehaviorTests.cs:889, 921`).
+- **Context.** Comment `PrintPreviewWindow.xaml.cs:462-465`: preview pages have a fixed size (XPS). If the user changes paper or orientation in the Print dialog, the preview choice must not be overwritten silently, nor forced onto the printer without asking. Rebuilding the pages from the dialog's choice is not possible there (the dialog has already closed, and paper such as Legal/A5 has no preset in the preview).
+- **Decision.** The preview has its own choices: Orientation (`Potret`/`Lanskap`, Portrait/Landscape), Paper (`A4`/`Letter`), Margin (0.5"/0.75"/1"), and the footer. Before the `PrintDialog` is shown, its ticket is aligned with the preview (`ApplyTicket(dialog)`, with an explicit size so as not to depend on the driver's paper table, comment `:499`). After the dialog is accepted, `ConfirmPaperMatchesPreview` compares the ticket with the preview (`TicketMatches`: the paper name including the `Rotated` variant, or width/height with a tolerance of 4 DIP; unset values count as matching). If they differ, a `ChoiceDialog` offers `Cetak sesuai pratinjau` (Print as previewed) or `Batal` (Cancel) (default: Cancel; Esc/X = Cancel). `Print as previewed` sets the ticket to the preview's paper and orientation. Without an installed printer, `dialog.PrintTicket` throws and the confirmation is skipped (the Print dialog itself reports the problem). The displayed paper name is mapped to a common name (`PaperName`), otherwise the raw enum name is used.
+- **Consequences.** Preview settings are not saved between openings (defaults: A4, portrait, Normal). Printing on paper other than A4/Letter is only possible with the preview size. Direct print (Ctrl+P) is the opposite: the page size is taken from the dialog (`PageLayout.FromPrintableArea`). Whether a changed `dialog.PrintTicket` object is actually used when `PrintDocument` runs is **not verified** (tests only check `ApplyTicket` on a separate `PrintTicket`).
+- **Evidence.** `PrintPreviewWindow.xaml.cs:421-569`, `PrintLayout.cs:54-65`. Tests: `ApplyTicket_*`, `TicketMatches_*`, `DescribeTicket_*` (`PrintContentAndCommandTests.cs:421-528`). `ConfirmPaperMatchesPreview` itself (with `ChoiceDialog`) and real printing are not run by any test; the `ShowPrintDialogForTests` hook is only used with a "cancel" result (`PrintPreviewWindowBehaviorTests.cs:889, 921`).
 
-## ADR-23 Dokumen cetak selalu bertema Terang
+## ADR-23 Print documents are always light-themed
 
-- **Konteks.** Aplikasi bisa bertema Gelap, tetapi kertas putih. Pratinjau utama memakai tema aktif.
-- **Keputusan.** `DocumentView.BuildPrintDocument(parsed)` merender ulang dengan `ThemeManager.LoadDictionary(dark: false)` dan `Background = White`
-  (`DocumentView.xaml.cs:596-602`). Berlaku untuk Cetak langsung dan Pratinjau Cetak. Jendela pratinjau sendiri bertema aplikasi (area abu-abu
-  memakai `SurfaceAltBrush`), hanya kertasnya putih. `PageLayout.Apply` menimpa `PagePadding` bawaan 48 dengan margin preset.
-- **Konsekuensi.** Kunci brush harus ada di `Light.xaml` (lihat [CONTRIBUTING.md](CONTRIBUTING.md#menambah-temakunci-brush-baru)). Lihat juga
-  [ADR-12](#adr-12-tema-lewat-resourcedictionary).
-- **Bukti.** `DocumentView.xaml.cs:596-602`, `PrintLayout.cs:73-79`. Test: `CreateDocument_UsesTheLightTheme_EvenWhenTheAppIsDark`,
-  `CreateDocument_IsWhitePaper_WithLayoutSizeAndMargin_NotTheDefaultPadding` (`PrintContentAndCommandTests.cs:31, 46`).
+- **Context.** The app can use the dark theme, but paper is white. The main preview uses the active theme.
+- **Decision.** `DocumentView.BuildPrintDocument(parsed)` re-renders with `ThemeManager.LoadDictionary(dark: false)` and `Background = White` (`DocumentView.xaml.cs:596-602`). This applies to direct print and Print Preview. The preview window itself uses the app theme (the gray area uses `SurfaceAltBrush`); only the paper is white. `PageLayout.Apply` overrides the default `PagePadding` of 48 with the preset margin.
+- **Consequences.** The brush keys must exist in `Light.xaml` (see [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-themebrush-key)). See also [ADR-12](#adr-12-theme-via-resourcedictionary).
+- **Evidence.** `DocumentView.xaml.cs:596-602`, `PrintLayout.cs:73-79`. Tests: `CreateDocument_UsesTheLightTheme_EvenWhenTheAppIsDark`, `CreateDocument_IsWhitePaper_WithLayoutSizeAndMargin_NotTheDefaultPadding` (`PrintContentAndCommandTests.cs:31, 46`).
 
-## ADR-24 Dokumen galat tidak pernah dicetak
+## ADR-24 Error documents are never printed
 
-- **Konteks.** Bila render gagal, pratinjau utama menampilkan dokumen galat (`CreateErrorDocument`) yang memuat `ex.Message` dan jalur
-  `CrashLog.LogPath` (`DocumentView.xaml.cs:529-535`), yaitu path profil pengguna. Komentar `DocumentView.xaml.cs:455-458`: dokumen galat tidak
-  boleh dicetak dan memuat path profil pengguna.
-- **Keputusan.** Jalur cetak/pratinjau cetak memanggil `CreateFlowDocument(..., throwOnFailure: true)`: kegagalan akhir dilempar sebagai
-  `InvalidOperationException` berpesan ramah (nama tipe galat asal + "Isi file tidak berubah. Rincian ada di crash.log.", tanpa path;
-  galat asal tersimpan sebagai `InnerException` dan dicatat `CrashLog`). `PreviewBuild` menjadikannya `Failed` (panel "Pratinjau tidak dapat
-  disusun.", tombol Cetak mati); Cetak langsung menampilkannya di `MessageBox` "Gagal mencetak.". Pratinjau utama tetap memakai dokumen galat
-  seperti sebelumnya.
-- **Konsekuensi.** Pesan di layar memakai `ex.Message` apa adanya untuk galat selain OOM; untuk kegagalan render pesannya sudah bebas path,
-  tetapi galat lain dari pustaka (mis. I/O) dapat memuat path di layar (bukan di kertas). Lihat [SECURITY.md](SECURITY.md#212-pratinjau-cetak-dan-cetak).
-- **Bukti.** `DocumentView.xaml.cs:455-483, 596-602`. Test: `RenderFailure_OnThePrintPath_FailsWithAFriendlyMessage_*`,
-  `RenderFailure_InThePrintWindow_ShowsTheFriendlyMessageInThePanel_*`, `RenderFailure_InTheMainPreview_StillShowsTheErrorDocument_AsBefore`
-  (`PrintContentAndCommandTests.cs:88, 122, 148`; memakai `DocumentView.RenderFaultForTests`).
+- **Context.** When rendering fails, the main preview shows an error document (`CreateErrorDocument`) that contains `ex.Message` and the `CrashLog.LogPath` (`DocumentView.xaml.cs:529-535`), that is, the user's profile path. Comment `DocumentView.xaml.cs:455-458`: an error document must not be printed and contains the user's profile path.
+- **Decision.** The print and Print Preview path calls `CreateFlowDocument(..., throwOnFailure: true)`: a final failure is thrown as an `InvalidOperationException` with a friendly message (the original error type name + `Isi file tidak berubah. Rincian ada di crash.log.` (The file contents are unchanged. Details are in crash.log.), with no path; the original error is kept as `InnerException` and logged by `CrashLog`). `PreviewBuild` turns this into `Failed` (panel `Pratinjau tidak dapat disusun.` (Preview could not be built.), Print button disabled); direct print shows it in a `MessageBox` `Gagal mencetak.` (Printing failed.). The main preview keeps using the error document as before.
+- **Consequences.** The on-screen message uses `ex.Message` as is for errors other than OOM. For render failures the message is already free of paths, but other library errors (e.g. I/O) may show a path on screen (not on paper). See [SECURITY.md](SECURITY.md#212-print-preview-and-print).
+- **Evidence.** `DocumentView.xaml.cs:455-483, 596-602`. Tests: `RenderFailure_OnThePrintPath_FailsWithAFriendlyMessage_*`, `RenderFailure_InThePrintWindow_ShowsTheFriendlyMessageInThePanel_*`, `RenderFailure_InTheMainPreview_StillShowsTheErrorDocument_AsBefore` (`PrintContentAndCommandTests.cs:88, 122, 148`; these use `DocumentView.RenderFaultForTests`).
 
-## ADR-25 Galat pratinjau dibungkus `Guard` dan paket XPS dibersihkan setelah idle
+## ADR-25 Preview errors wrapped in `Guard`, and XPS package cleaned up after idle
 
-- **Konteks.** Komentar `PreviewBuild.cs:17-21`: pratinjau tidak mengubah dokumen, jadi galatnya selalu boleh dipulihkan dan tidak boleh
-  memicu jalur fatal aplikasi ([ADR-11](#adr-11-crashlog-dan-isrecoverable) menganggap OOM dan `InvalidOperationException` fatal untuk jalur
-  lain). Komentar `PreviewBuild.cs:291-292`: `DocumentViewer` memuat `PageContent` async lewat `pack://`; menutup paket lebih awal membuat
-  pemuatan yang sudah antre melempar `UriFormatException` di dispatcher. Komentar `:259-260`: `CancelAsync` hanya menandai batal, penulis masih
-  bisa menjalankan callback berikutnya.
-- **Keputusan.** Semua penangan peristiwa `PreviewBuild` dibungkus `Guard`: galat (termasuk OOM) menjadikan siklus `Failed` lewat `Fail`
-  (dicatat, penulis dibatalkan, penerima `Changed` yang melempar ikut ditangkap); galat sesudah `Failed`/`Dispose` hanya dicatat. Galat di
-  kode jendela ditangkap `StartBuild`/`OnBuildChanged` dan ditampilkan `ShowFailure`. `Dispose` membuang peristiwa, mematikan paginasi latar,
-  lalu menutup paket hanya setelah penulis XPS melapor batal/selesai, di prioritas `ApplicationIdle`; timer cadangan 10 dtk menutup paket bila
-  laporan itu tidak pernah datang, dan dihentikan begitu pembersihan dijadwalkan. Pembuatan jendela di `PrintPreview_Executed` ditangkap, tetapi
-  `ShowDialog` sengaja di luar `try` (komentar `MainWindow.xaml.cs:770-772`): galat callback selama dialog tampil menjadi urusan
-  `App.OnDispatcherUnhandledException`, bukan ditelan.
-- **Konsekuensi.** Timer cadangan berarti paket bisa ditutup 10 dtk setelah `Dispose` walau penulis belum melapor; dampaknya pada penulis yang
-  masih berjalan **belum diverifikasi**. Galat pada `PreviewBuild` atau jendela tampil sebagai panel galat, bukan dialog.
-- **Bukti.** `PreviewBuild.cs:91-329`, `PrintPreviewWindow.xaml.cs:103-150`. Test: `SubscriberThatThrows_FailsTheBuild_AndNeverReachesTheDispatcher`
-  (`PreviewBuildTests.cs:468`), `Dispose_WhileRendering_KeepsThePackageUntilTheWriterEnds_*`, `Dispose_WhileRendering_ArmsAFallbackTimer_*`,
-  `Dispose_WhenCleanupIsAlreadyScheduledDuringCancel_*`, `RepeatedCycles_DisposedWhileRendering_*` (`:516, 548, 576, 608`),
-  `ClosingRightAfterThePagesAppear_*`, `ChangingLayoutManyTimes_WhileRendering_ThenClosing_*` (`PrintPreviewWindowBehaviorTests.cs:759, 950`).
+- **Context.** Comment `PreviewBuild.cs:17-21`: the preview does not change the document, so its errors can always be recovered from and must not trigger the application's fatal path ([ADR-11](#adr-11-crashlog-and-isrecoverable) treats OOM and `InvalidOperationException` as fatal for other paths). Comment `PreviewBuild.cs:291-292`: `DocumentViewer` loads `PageContent` asynchronously via `pack://`; closing the package early makes a load that is already queued throw `UriFormatException` on the dispatcher. Comment `:259-260`: `CancelAsync` only marks cancellation; the writer may still invoke the next callback.
+- **Decision.** All event handlers of `PreviewBuild` are wrapped in `Guard`: an error (including OOM) moves the cycle to `Failed` via `Fail` (logged, the writer is cancelled, and a `Changed` subscriber that throws is also caught); errors after `Failed`/`Dispose` are only logged. Errors in the window code are caught by `StartBuild`/`OnBuildChanged` and displayed via `ShowFailure`. `Dispose` discards events, stops background pagination, and closes the package only after the XPS writer reports cancelled/finished, at `ApplicationIdle` priority. A fallback timer of 10 s closes the package if that report never arrives, and it is stopped once cleanup has been scheduled. Window creation in `PrintPreview_Executed` is caught, but `ShowDialog` is deliberately outside the `try` (comment `MainWindow.xaml.cs:770-772`): callback errors while the dialog is shown are handled by `App.OnDispatcherUnhandledException`, not swallowed.
+- **Consequences.** The fallback timer means the package can be closed 10 s after `Dispose` even though the writer has not reported; the effect on a writer that is still running is **not verified**. Errors in `PreviewBuild` or the window appear as an error panel, not as a dialog.
+- **Evidence.** `PreviewBuild.cs:91-329`, `PrintPreviewWindow.xaml.cs:103-150`. Tests: `SubscriberThatThrows_FailsTheBuild_AndNeverReachesTheDispatcher` (`PreviewBuildTests.cs:468`), `Dispose_WhileRendering_KeepsThePackageUntilTheWriterEnds_*`, `Dispose_WhileRendering_ArmsAFallbackTimer_*`, `Dispose_WhenCleanupIsAlreadyScheduledDuringCancel_*`, `RepeatedCycles_DisposedWhileRendering_*` (`:516, 548, 576, 608`), `ClosingRightAfterThePagesAppear_*`, `ChangingLayoutManyTimes_WhileRendering_ThenClosing_*` (`PrintPreviewWindowBehaviorTests.cs:759, 950`).
 
-## ADR-26 Seam khusus test pada kode cetak
+## ADR-26 Test-only seams in print code
 
-- **Konteks.** Dialog sistem (`PrintDialog`), printer, dan kegagalan renderer tidak bisa dipakai di test otomatis (CLAUDE.md: test tidak
-  menyentuh data pengguna; membuka dialog sungguhan menggantung proses test). Komentar `PrintPreviewWindow.xaml.cs:432`: membaca tiket printer lambat.
-- **Keputusan.** Kode produksi menyediakan titik sambung `internal` kecil: `PrintPreviewWindow.ShowPrintDialogForTests` (pengganti `ShowDialog`;
-  false = batal), `DocumentView.RenderFaultForTests` (memaksa kegagalan renderer), konstruktor `PrintSource(snapshot, Task)` (menahan hasil parse),
-  properti `PreviewBuild.Document`/`CleanupFallbackTimer` dan `PrintPreviewWindow.Stage`/`PrintedDocument`, serta helper statis murni
-  (`TicketMatches`, `ApplyTicket`, `PaperName`, `DescribeTicket`). Sisi test: `WpfHost.Run` tidak lagi sekadar `Dispatcher.Invoke`, dan galat
-  yang lolos ke dispatcher dicatat lalu menggagalkan test ([TESTING.md](TESTING.md#thread-sta-dan-wpfhost)).
-- **Konsekuensi.** Permukaan `internal` bertambah. Beberapa test membaca anggota privat lewat refleksi (`PreviewBuild.counter`,
-  `packageUri`, `cleanupScheduled`, metode `Cleanup`); mengganti namanya memecahkan test. Hook dialog hanya menguji cabang "batal"; cabang diterima
-  (`ConfirmPaperMatchesPreview`, `dialog.PrintDocument`) tidak terjangkau test ([ADR-22](#adr-22-pratinjau-punya-pengaturan-kertas-sendiri-dan-konfirmasi-bila-dialog-cetak-berbeda)).
-- **Bukti.** `PrintPreviewWindow.xaml.cs:418-419`, `DocumentView.xaml.cs:486-487`, `PrintLayout.cs:107-112`, `PreviewBuild.cs:82-86`,
-  `PreviewBuildTests.cs:15-16, 430, 544-545, 590, 601`, `Support/WpfHost.cs`.
+- **Context.** The system dialog (`PrintDialog`), printers, and renderer failures cannot be used in automated tests (CLAUDE.md: tests must not touch user data; opening a real dialog hangs the test process). Comment `PrintPreviewWindow.xaml.cs:432`: reading the printer ticket is slow.
+- **Decision.** The production code provides small `internal` connection points: `PrintPreviewWindow.ShowPrintDialogForTests` (replacement for `ShowDialog`; false = cancel), `DocumentView.RenderFaultForTests` (forces a renderer failure), the constructor `PrintSource(snapshot, Task)` (holds a parse result), the properties `PreviewBuild.Document`/`CleanupFallbackTimer` and `PrintPreviewWindow.Stage`/`PrintedDocument`, and the pure static helpers (`TicketMatches`, `ApplyTicket`, `PaperName`, `DescribeTicket`). On the test side: `WpfHost.Run` is no longer a plain `Dispatcher.Invoke`, and an error that escapes to the dispatcher is logged and fails the test ([TESTING.md](TESTING.md#sta-thread-and-wpfhost)).
+- **Consequences.** The `internal` surface grows. Some tests read private members through reflection (`PreviewBuild.counter`, `packageUri`, `cleanupScheduled`, the `Cleanup` method); renaming them breaks the tests. The dialog hook only tests the "cancel" branch; the accepted branch (`ConfirmPaperMatchesPreview`, `dialog.PrintDocument`) is not reachable by tests ([ADR-22](#adr-22-preview-has-its-own-paper-settings-and-confirmation-when-the-print-dialog-differs)).
+- **Evidence.** `PrintPreviewWindow.xaml.cs:418-419`, `DocumentView.xaml.cs:486-487`, `PrintLayout.cs:107-112`, `PreviewBuild.cs:82-86`, `PreviewBuildTests.cs:15-16, 430, 544-545, 590, 601`, `Support/WpfHost.cs`.
 
 ---
 
-## ADR-27 Folder self-contained (bukan single-file) dan installer per pengguna
+## ADR-27 Self-contained folder (not single-file) and per-user installer
 
-- **Konteks.** Single-file WPF tetap mengekstrak pustaka native ke folder sementara (jejak di `%TEMP%`, bertentangan dengan portable tanpa
-  jejak). WPF tidak mendukung trimming. Pengguna umum tidak boleh diminta memasang .NET ([DISTRIBUTION.md](DISTRIBUTION.md) §1 #2, §2.1).
-- **Keputusan.** Publish memakai profil `win-x64`: self-contained, `PublishSingleFile=false`, `PublishReadyToRun=false`, `PublishTrimmed=false`.
-  Installer Inno Setup 6 dengan `PrivilegesRequired=lowest` dan `PrivilegesRequiredOverridesAllowed=dialog`: bawaan per pengguna ke
-  `%LOCALAPPDATA%\Programs\Makdon` tanpa UAC; pilihan semua pengguna ke `Program Files`. Mode 64-bit wajib, `MinVersion=10.0.14393`.
-  `IncludeNativeLibrariesForSelfExtract` dihapus dari csproj.
-- **Konsekuensi.** Keluaran lebih besar: 155,5 MB terurai (258 berkas) dan 65,0 MB zip (diukur 2026-10-08). Tidak ada pemeriksaan pembaruan; update manual.
-  ReadyToRun belum diukur manfaatnya. Installer belum pernah dikompilasi, jadi perilakunya **belum diverifikasi**.
-- **Bukti.** `src/Makdon/Properties/PublishProfiles/win-x64.pubxml:11-17`; `src/Makdon/Makdon.csproj:22`; `installer/Makdon.iss:41-49`.
+- **Context.** A single-file WPF app still extracts native libraries to a temporary folder (traces in `%TEMP%`, which conflicts with a portable app that leaves no traces). WPF does not support trimming. General users should not be asked to install .NET ([DISTRIBUTION.md](DISTRIBUTION.md) §1 #2, §2.1).
+- **Decision.** Publishing uses the `win-x64` profile: self-contained, `PublishSingleFile=false`, `PublishReadyToRun=false`, `PublishTrimmed=false`. Inno Setup 6 installer with `PrivilegesRequired=lowest` and `PrivilegesRequiredOverridesAllowed=dialog`: by default per user to `%LOCALAPPDATA%\Programs\Makdon` without UAC; the option for all users is `Program Files`. 64-bit mode is required, `MinVersion=10.0.14393`. `IncludeNativeLibrariesForSelfExtract` was removed from the csproj.
+- **Consequences.** The output is larger: 155.5 MB unpacked (258 files) and a 65.0 MB zip (measured 2026-10-08). There is no update check; updates are manual. The benefit of ReadyToRun has not been measured. The installer has never been compiled, so its behavior is **not verified**.
+- **Evidence.** `src/Makdon/Properties/PublishProfiles/win-x64.pubxml:11-17`; `src/Makdon/Makdon.csproj:22`; `installer/Makdon.iss:41-49`.
 
-## ADR-28 Mode portable lewat penanda `Makdon.portable`, data di `data\`
+## ADR-28 Portable mode via `Makdon.portable` marker, data in `data\`
 
-- **Konteks.** Satu exe untuk dua mode. Portable harus tanpa jejak di `%APPDATA%`. Pengaturan tidak boleh pindah diam-diam ke tempat lain
-  saat folder tak bisa ditulis (DISTRIBUTION §3).
-- **Keputusan.** `AppPaths.Detect`: penanda di samping exe menentukan mode. `SettingsPath` dan `CrashLogPath` berada di `<folder exe>\data\`.
-  Bila folder data tak bisa ditulis (`IsDataDirectoryWritable`), pengaturan hanya di memori dan pengguna diberi tahu sekali; **tidak** ada fallback
-  ke `%APPDATA%`. Penanda tidak ikut installer (`Excludes`), dihapus dari bahan zip sebelum penanda portable dibuat, dan `Makdon.iss` menolak dikompilasi bila
-  folder publish memuatnya.
-- **Konsekuensi.** Data ikut folder (dan ikut media lepas; lihat [SECURITY.md](SECURITY.md) 2.13). Memindahkan folder portable membuat
-  path pendaftaran basi (ditangani ADR-30). Pengguna yang menyalin folder portable juga menyalin pengaturannya.
-- **Bukti.** `AppPaths.cs:13, 35-41, 60-65, 81-96`; `installer/Makdon.iss:22-25, 80`; `scripts/build-release.ps1:129-130, 155-158`; `AppPathsTests.cs`
-  (`MarkerNextToTheExe_MeansPortable_*`, `IsDataDirectoryWritable_Portable_*`).
+- **Context.** One exe for two modes. Portable mode must leave no trace in `%APPDATA%`. Settings must not silently move elsewhere when the folder cannot be written (DISTRIBUTION §3).
+- **Decision.** `AppPaths.Detect`: a marker file beside the exe determines the mode. `SettingsPath` and `CrashLogPath` are in `<exe folder>\data\`. If the data folder cannot be written (`IsDataDirectoryWritable`), settings are kept in memory only and the user is told once; there is **no** fallback to `%APPDATA%`. The marker is not included in the installer (`Excludes`), is removed from the zip material before the portable marker is created, and `Makdon.iss` refuses to compile if the publish folder contains it.
+- **Consequences.** Data travels with the folder (and with removable media; see [SECURITY.md](SECURITY.md) 2.13). Moving a portable folder makes the registration paths stale (handled by ADR-30). A user who copies the portable folder also copies its settings.
+- **Evidence.** `AppPaths.cs:13, 35-41, 60-65, 81-96`; `installer/Makdon.iss:22-25, 80`; `scripts/build-release.ps1:129-130, 155-158`; `AppPathsTests.cs` (`MarkerNextToTheExe_MeansPortable_*`, `IsDataDirectoryWritable_Portable_*`).
 
-## ADR-29 Scope single-instance per folder exe untuk portable
+## ADR-29 Single-instance scope per exe folder for portable
 
-- **Konteks.** Nama mutex dan pipe semula hanya memuat SID pengguna dan id sesi Windows. Portable dan terpasang di sesi yang sama
-  akan saling meneruskan berkas: file yang dibuka di portable masuk ke instance terpasang yang sedang berjalan, atau sebaliknya.
-- **Keputusan.** `AppPaths.SingleInstanceScope`: mode terpasang kosong (nama bawaan); portable `p` + 8 byte pertama SHA-256 dari path folder exe
-  yang dinormalkan (huruf besar, tanpa pemisah di akhir). Nama jadi `Local\Makdon.SingleInstance.<SID>.<scope>` dan pipe
-  `Makdon.<SID>.s<sesi>.<scope>`.
-- **Konsekuensi.** Dua salinan portable di folder berbeda berjalan sebagai instance masing-masing. Dua portable di folder yang sama berbagi satu
-  instance. Memindahkan folder portable menghasilkan scope baru.
-- **Bukti.** `AppPaths.cs:47-55`; `SingleInstance.cs:43-44, 61-62`; `App.xaml.cs:24`; `AppPathsTests.cs`
-  (`SingleInstanceScope_IsAStableHashOfTheExeFolder_WhenPortable`, `SingleInstanceScope_DiffersBetweenPortableFolders`).
+- **Context.** The mutex and pipe names originally included only the user's SID and the Windows session id. A portable and an installed copy in the same session would forward files to each other: a file opened in the portable copy goes to the running installed instance, or vice versa.
+- **Decision.** `AppPaths.SingleInstanceScope`: installed mode is empty (default name); portable mode is `p` + the first 8 bytes of the SHA-256 of the normalized exe folder path (uppercase, no trailing separator). The name becomes `Local\Makdon.SingleInstance.<SID>.<scope>` and the pipe `Makdon.<SID>.s<session>.<scope>`.
+- **Consequences.** Two portable copies in different folders run as separate instances. Two portable copies in the same folder share one instance. Moving a portable folder produces a new scope.
+- **Evidence.** `AppPaths.cs:47-55`; `SingleInstance.cs:43-44, 61-62`; `App.xaml.cs:24`; `AppPathsTests.cs` (`SingleInstanceScope_IsAStableHashOfTheExeFolder_WhenPortable`, `SingleInstanceScope_DiffersBetweenPortableFolders`).
 
-## ADR-30 Pendaftaran "Buka dengan" portable di HKCU lewat `FileAssociation` dan `IRegistryStore`; tolak bila terpasang
+## ADR-30 Portable "Open with" registration in HKCU via `FileAssociation` and `IRegistryStore`; refused when installed
 
-- **Konteks.** Portable tidak memasang apa pun, tetapi pengguna ingin "Buka dengan" juga untuk versi portable. Installer tidak bisa
-  membersihkan HKCU pengguna secara andal (DISTRIBUTION §4.3). HKCU menutupi HKLM dalam gabungan HKCR. Test tidak boleh menulis registri (CLAUDE.md).
-- **Keputusan.** `FileAssociation` (bukan skrip) menulis tabel registri DISTRIBUTION 4.1 ke HKCU lewat `IRegistryStore`. Deteksi instalasi membaca kunci
-  `Uninstall\{AppId}_is1` di HKCU dan HKLM (view 64-bit, `WOW6432Node`), lalu memeriksa `Makdon.exe` di folder yang tercatat.
-  `Register` menolak (`BlockedByInstallation`) bila ada instalasi, tanpa memandang hive. Exe yang sudah terdaftar diklasifikasi
-  (`ThisExe`, `Stale`, `OtherPortable`, `OtherExe`) dan hanya diganti setelah konfirmasi. `Unregister` hanya menghapus kunci yang menunjuk exe ini.
-  Pemeriksaan startup portable (`CheckStartup`) menawarkan memperbarui path basi, atau mencabut pendaftaran portable yang menutupi instalasi.
-  Perintah relatif diklasifikasi `OtherExe` dan tidak dinormalkan terhadap folder kerja; path UNC tidak diperiksa dengan `File.Exists` (`OtherExe`, tanpa I/O di thread UI); `Register` menolak `ExeNotFound` bila exe bukan `Makdon.exe` atau tidak ada (lihat [DISTRIBUTION.md](DISTRIBUTION.md) 4.3). Test memakai `FakeRegistryStore` (`Support/FakeRegistryStore.cs`).
-- **Konsekuensi.** GUID `AppId` menjadi konstanta di tiga tempat (`AppInfo.cs:9`, `FileAssociation.cs:78-79`, `installer/Makdon.iss:34`) yang harus sama.
-  Status "paling asing" bisa menyembunyikan tawaran pencabutan bila dua kunci menunjuk exe berbeda (dugaan, lihat DISTRIBUTION 4.3).
-- **Bukti.** `FileAssociation.cs:106-125, 127-175, 178-184, 189-210, 213-237, 243-271`; `RegistryStore.cs:11-32`;
-  `FileAssociationTests.cs` (`Installation_*`, `Register_*`, `Unregister_*`, `CheckStartup_*`, `Status_*`).
+- **Context.** A portable copy installs nothing, but the user wants `"Open with"` (`Buka dengan`, Open with) to work for the portable version too. The installer cannot reliably clean up the user's HKCU (DISTRIBUTION §4.3). HKCU masks HKLM in the merged HKCR view. Tests must not write to the registry (CLAUDE.md).
+- **Decision.** `FileAssociation` (not a script) writes the registry table of DISTRIBUTION 4.1 to HKCU via `IRegistryStore`. Installation detection reads the `Uninstall\{AppId}_is1` key in HKCU and HKLM (64-bit view, `WOW6432Node`), then checks `Makdon.exe` in the recorded folder. `Register` refuses (`BlockedByInstallation`) if an installation exists, regardless of hive. An exe that is already registered is classified (`ThisExe`, `Stale`, `OtherPortable`, `OtherExe`) and replaced only after confirmation. `Unregister` only removes keys that point to this exe. The startup check for portable mode (`CheckStartup`) offers to update a stale path, or to revoke a portable registration that masks an installation. Relative commands are classified as `OtherExe` and are not normalized against the working folder; UNC paths are not checked with `File.Exists` (`OtherExe`, no I/O on the UI thread); `Register` refuses with `ExeNotFound` if the exe is not `Makdon.exe` or does not exist (see [DISTRIBUTION.md](DISTRIBUTION.md) 4.3). Tests use `FakeRegistryStore` (`Support/FakeRegistryStore.cs`).
+- **Consequences.** The `AppId` GUID is a constant in three places (`AppInfo.cs:9`, `FileAssociation.cs:78-79`, `installer/Makdon.iss:34`) that must match. The "most foreign" status can hide the revocation offer when two keys point to different exes (assumption, see DISTRIBUTION 4.3).
+- **Evidence.** `FileAssociation.cs:106-125, 127-175, 178-184, 189-210, 213-237, 243-271`; `RegistryStore.cs:11-32`; `FileAssociationTests.cs` (`Installation_*`, `Register_*`, `Unregister_*`, `CheckStartup_*`, `Status_*`).
 
-## ADR-31 Mutex installer bernama tetap (`Makdon.AppMutex`), bukan Restart Manager
+## ADR-31 Fixed installer mutex name (`Makdon.AppMutex`), not Restart Manager
 
-- **Konteks.** Installer harus tahu Makdon sedang berjalan agar dokumen belum disimpan tidak hilang. Nama mutex single-instance memuat SID pengguna, sehingga
-  tidak bisa dipakai installer (DISTRIBUTION §5.2). Restart Manager tidak ditangani aplikasi, dan `Window_Closing` bisa membatalkan penutupan
-  (`MainWindow.xaml.cs:876`), jadi Restart Manager tidak bisa dipakai untuk memaksa penutupan dengan aman.
-- **Keputusan.** `AppMutex=Makdon.AppMutex,Global\Makdon.AppMutex` di installer. Aplikasi membuat kedua nama itu (`InstallerMutex.Acquire`)
-  hanya di mode terpasang, dipegang sepanjang proses, dan mengabaikan galat. Portable tidak membuatnya.
-  `CloseApplications` (Restart Manager) tidak dipakai.
-- **Konsekuensi.** Installer dan uninstaller meminta pengguna menutup Makdon bila masih berjalan. Installer tidak melihat instance portable yang sedang
-  berjalan (sengaja: portable tidak boleh mengganggu instalasi). Penutupan oleh Restart Manager tidak didukung. Perilaku pemeriksaan oleh installer
-  **belum diverifikasi**.
-- **Bukti.** `installer/Makdon.iss:51-52`; `src/Makdon/InstallerMutex.cs:8-24`; `src/Makdon/AppInfo.cs:11-13`; `src/Makdon/App.xaml.cs:23`.
+- **Context.** The installer must know whether Makdon is running so that unsaved documents are not lost. The single-instance mutex name includes the user's SID, so the installer cannot use it (DISTRIBUTION §5.2). Restart Manager is not handled by the app, and `Window_Closing` can cancel the close (`MainWindow.xaml.cs:876`), so Restart Manager cannot be used to force a safe shutdown.
+- **Decision.** `AppMutex=Makdon.AppMutex,Global\Makdon.AppMutex` in the installer. The app creates both names (`InstallerMutex.Acquire`) only in installed mode, holds them for the lifetime of the process, and ignores errors. Portable mode does not create them. `CloseApplications` (Restart Manager) is not used.
+- **Consequences.** The installer and uninstaller ask the user to close Makdon if it is still running. The installer does not see a running portable instance (deliberate: a portable copy must not disturb the installation). Closing via Restart Manager is not supported. The installer's checking behavior is **not verified**.
+- **Evidence.** `installer/Makdon.iss:51-52`; `src/Makdon/InstallerMutex.cs:8-24`; `src/Makdon/AppInfo.cs:11-13`; `src/Makdon/App.xaml.cs:23`.
 
-## ADR-32 .NET 10 dan switch XPS di runtimeconfig
+## ADR-32 .NET 10 and XPS switch in runtimeconfig
 
-- **Konteks.** .NET 9 berhenti didukung 2026-11-10; aplikasi self-contained membawa runtime ke pengguna (DISTRIBUTION §11).
-  .NET 10 membatasi font halaman XPS hanya dari paket yang sama. Paket XPS di memori (Pratinjau Cetak) juga menolak font miliknya sendiri,
-  sehingga setiap halaman bertekst gagal dan Pratinjau Cetak selalu gagal. `AppContext.SetSwitch` di kode tidak cukup karena WPF men-cache switch
-  saat gambar pertama dimuat.
-- **Keputusan.** Target `net10.0-windows`. `RuntimeHostConfigurationOption Switch.System.Windows.DisableXpsPackageBoundaryRestriction=true` di
-  `Makdon.csproj` dan `Makdon.Tests.csproj`. Test `XpsBoundarySwitchTests` memeriksa bahwa runtimeconfig Makdon memuat switch itu dan
-  proses test memasangnya juga. Alternatif yang tidak dipilih: menulis XPS ke berkas sementara.
-- **Konsekuensi.** Pembatasan batas paket XPS dimatikan untuk seluruh proses. Alasan aman: Makdon hanya membaca XPS buatannya sendiri
-  (risiko residual R14 di [SECURITY.md](SECURITY.md)). Setiap pindah versi .NET, switch dan perilaku ini harus diperiksa ulang.
-- **Bukti.** `src/Makdon/Makdon.csproj:33-42`; `src/Makdon.Tests/Makdon.Tests.csproj:24-26`; `src/Makdon.Tests/WpfHostStartupTests.cs:48-70`
-  (`XpsBoundarySwitchTests`).
+- **Context.** .NET 9 reaches end of support on 2026-11-10; a self-contained app ships the runtime to the user (DISTRIBUTION §11). .NET 10 restricts XPS page fonts to those from the same package. The in-memory XPS package (Print Preview) also rejects its own fonts, so every page with text fails and Print Preview always fails. `AppContext.SetSwitch` in code is not enough because WPF caches the switch when the first image is loaded.
+- **Decision.** Target `net10.0-windows`. `RuntimeHostConfigurationOption Switch.System.Windows.DisableXpsPackageBoundaryRestriction=true` in `Makdon.csproj` and `Makdon.Tests.csproj`. The test `XpsBoundarySwitchTests` checks that the Makdon runtimeconfig contains that switch and that the test process sets it as well. Alternative not chosen: writing XPS to a temporary file.
+- **Consequences.** The XPS package boundary restriction is disabled for the whole process. The reason it is safe: Makdon only reads the XPS it generates itself (residual risk R14 in [SECURITY.md](SECURITY.md)). With every change of .NET version, this switch and its behavior must be checked again.
+- **Evidence.** `src/Makdon/Makdon.csproj:33-42`; `src/Makdon.Tests/Makdon.Tests.csproj:24-26`; `src/Makdon.Tests/WpfHostStartupTests.cs:48-70` (`XpsBoundarySwitchTests`).
 
-## ADR-33 `WpfHost` memakai `TestApp` tanpa `OnStartup`
+## ADR-33 `WpfHost` uses `TestApp` without `OnStartup`
 
-- **Konteks.** Konstruktor `Application` menitipkan pemanggilan `OnStartup` ke dispatcher, jadi `OnStartup` berjalan begitu `Dispatcher.Run` dimulai,
-  walau tanpa `Application.Run`. Sebelumnya host test membuat `App` biasa, sehingga startup sungguhan ikut berjalan: mutex/pipe single-instance
-  produksi, `MainWindow`, dan settings `%APPDATA%`. Bila Makdon sudah berjalan, test bisa meneruskan berkas ke instance itu lalu memanggil `Shutdown()`,
-  dan setiap test WPF sesudahnya gagal dengan "The Application object is being shut down".
-- **Keputusan.** `WpfHost.TestApp : App` menimpa `OnStartup` dengan kosong dan memuat resource `app.xaml` lewat `LoadAppXaml()`
-  (BAML dibaca langsung ke instance itu, isi resource tetap sama dengan App sungguhan). Pencatat galat dispatcher tetap dipasang.
-- **Konsekuensi.** Test tidak menjalankan `App.OnStartup` sama sekali; alur startup hanya bisa diuji secara terpisah (lihat TESTING "Yang tidak teruji").
-  `InitializeComponent` tidak dipakai di host test.
-- **Bukti.** `src/Makdon.Tests/Support/WpfHost.cs` (kelas `TestApp`); `src/Makdon.Tests/WpfHostStartupTests.cs:14-46`
-  (`TestHost_DoesNotRunAppStartup_AndKeepsTheApplicationAlive`, `TestHost_LoadsTheSameThemeResourcesAsApp`).
+- **Context.** The `Application` constructor queues the `OnStartup` call to the dispatcher, so `OnStartup` runs as soon as `Dispatcher.Run` starts, even without `Application.Run`. Previously the test host created a plain `App`, so the real startup also ran: the production single-instance mutex/pipe, `MainWindow`, and the settings in `%APPDATA%`. If Makdon was already running, a test could forward files to that instance and then call `Shutdown()`, and every subsequent WPF test failed with "The Application object is being shut down".
+- **Decision.** `WpfHost.TestApp : App` overrides `OnStartup` with an empty body and loads the `app.xaml` resources via `LoadAppXaml()` (BAML is read directly into that instance; the resource contents remain the same as the real App). The dispatcher error logger is still installed.
+- **Consequences.** Tests never run `App.OnStartup` at all; the startup flow can only be tested separately (see TESTING "Not tested"). `InitializeComponent` is not used in the test host.
+- **Evidence.** `src/Makdon.Tests/Support/WpfHost.cs` (class `TestApp`); `src/Makdon.Tests/WpfHostStartupTests.cs:14-46` (`TestHost_DoesNotRunAppStartup_AndKeepsTheApplicationAlive`, `TestHost_LoadsTheSameThemeResourcesAsApp`).

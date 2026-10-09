@@ -1,29 +1,24 @@
-# Panduan Kontribusi
+# Contribution Guide
 
-**Tujuan:** cara menyiapkan lingkungan, membangun/menguji/mem-publish Makdon, konvensi kode, cara menulis test, cara menambah
-hal-hal umum (tema, perintah, mode tampilan, ekstensi, format toolbar), checklist PR, dan larangan proyek.
-**Pembaca:** kontributor baru dan agen AI yang mengubah kode. Aturan resmi proyek ada di [../CLAUDE.md](../CLAUDE.md); dokumen ini
-merangkum dan menambah langkah praktis. Gambaran arsitektur: [ARCHITECTURE.md](ARCHITECTURE.md). Pengujian: [TESTING.md](TESTING.md).
+**Purpose:** how to set up the environment, build/test/publish Makdon, code conventions, how to write tests, how to add common things (themes, commands, view modes, extensions, toolbar formats), the PR checklist, and the project prohibitions.
+**Audience:** new contributors and AI agents that change code. The official project rules are in [../CLAUDE.md](../CLAUDE.md); this document summarizes them and adds practical steps. Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md). Testing: [TESTING.md](TESTING.md).
 
 ## 1. Setup
 
-- Windows (WPF) dan **.NET 10 SDK** (README: "Butuh .NET 10 SDK"). Tidak ada dependensi alat lain untuk build/test; paket NuGet dipulihkan otomatis
-  oleh `dotnet build`. Proyek memakai `net10.0-windows` (`src/Makdon/Makdon.csproj:5`), jadi tidak bisa dibangun di Linux/macOS.
-- CI hanya untuk rilis (`.github/workflows/release.yml`, dipicu push ke branch `build`); tidak ada CI per PR. Tidak ada analyzer atau `.editorconfig`;
-  penjaga kualitas saat ini adalah aturan "0 warning" dan test (lihat bagian 6).
+- Windows (WPF) and the **.NET 10 SDK** (README: "Requires the **.NET 10 SDK**"). No other tool dependencies are needed for build/test; NuGet packages are restored automatically by `dotnet build`. The project targets `net10.0-windows` (`src/Makdon/Makdon.csproj:5`), so it cannot be built on Linux/macOS.
+- CI runs only for releases (`.github/workflows/release.yml`, triggered by a push to the `build` branch); there is no per-PR CI. There is no analyzer or `.editorconfig`; the current quality guards are the "0 warnings" rule and the tests (see section 6).
 
 ```powershell
-dotnet build Makdon.sln                   # harus 0 warning, 0 error
-dotnet test src/Makdon.Tests              # xUnit; semua harus hijau
+dotnet build Makdon.sln                   # must be 0 warnings, 0 errors
+dotnet test src/Makdon.Tests              # xUnit; all must pass
 dotnet run --project src/Makdon -- file.md
 dotnet publish src/Makdon -p:PublishProfile=win-x64
 ```
 
-Hasil publish: `src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe` (self-contained: runtime ikut dikemas, jadi
-.NET tidak perlu dipasang di mesin tujuan). Profil publish ada di `src/Makdon/Properties/PublishProfiles/win-x64.pubxml`. `RuntimeIdentifier` tidak dipaksa di `Makdon.csproj` agar build/test biasa tetap netral (komentar `Makdon.csproj:15-18`).
-Properti `<Version>` saat ini `0.1.0` (`Makdon.csproj:12`), sama dengan rilis awal di [../CHANGELOG.md](../CHANGELOG.md). Ubah keduanya bersama saat rilis.
+Publish output: `src\Makdon\bin\Release\net10.0-windows\win-x64\publish\Makdon.exe` (self-contained: the runtime is bundled, so .NET does not need to be installed on the target machine). The publish profile is at `src/Makdon/Properties/PublishProfiles/win-x64.pubxml`. `RuntimeIdentifier` is not forced in `Makdon.csproj`, so ordinary build/test stays neutral (comment at `Makdon.csproj:15-18`).
+The `<Version>` property is currently `0.1.0` (`Makdon.csproj:12`), the same as the initial release in [../CHANGELOG.md](../CHANGELOG.md). Change both together when releasing.
 
-## 2. Struktur folder
+## 2. Folder structure
 
 ```text
 Makdon.sln
@@ -54,50 +49,46 @@ src/Makdon.Tests/           xUnit
     *Tests.cs               peta berkas -> area ada di TESTING.md
 ```
 
-`bin/`, `obj/`, `.vs/`, `*.user`, `TestResults/` diabaikan git (`.gitignore`).
+`bin/`, `obj/`, `.vs/`, `*.user`, `TestResults/` are ignored by git (`.gitignore`).
 
-## 3. Konvensi kode dan bahasa
+## 3. Code and language conventions
 
-Dari CLAUDE.md, dilengkapi pola yang konsisten terlihat di kode:
+From CLAUDE.md, supplemented by the patterns consistently visible in the code:
 
-- **Bahasa:** teks UI, pesan galat, dan komentar kode berbahasa **Indonesia**; nama identifier berbahasa **Inggris**.
-- **Nullable dan ImplicitUsings aktif**; build tidak boleh menghasilkan warning (`System.IO` ditambahkan lewat `<Using>` di csproj).
-- **Komentar menjelaskan alasan (mengapa)**, bukan mengulang kode. Contoh gaya: komentar di atas keputusan non-obvious seperti
-  `DocumentTab.cs:33-36`, `TextFileIO.cs:145`.
-- **Jangan menambah fitur di luar permintaan.** Temuan di luar tugas dilaporkan, tidak diperbaiki sekalian.
-- **Penangkapan galat spesifik**, bukan `catch (Exception)` polos: `catch (Exception ex) when (ex is IOException or
-  UnauthorizedAccessException ...)`. Galat I/O yang bisa dipulihkan ditampilkan ke pengguna; galat tak terduga dicatat `CrashLog`.
-  Pengecualian yang disengaja (ekspor HTML dan cetak menangkap semua kecuali OOM; `PreviewBuild.Guard` menangkap semua **termasuk** OOM,
-  [ADR-25](DESIGN-DECISIONS.md#adr-25-galat-pratinjau-dibungkus-guard-dan-paket-xps-dibersihkan-setelah-idle)) ada komentarnya.
-- **Helper lapisan bawah yang "tidak pernah melempar"** (`AppSettings.Load/Save`, `CrashLog.Write`, `SingleInstance`) menyatakannya di
-  ringkasan XML; pertahankan sifat itu saat mengubahnya.
-- Gaya yang terlihat: namespace file-scoped (`namespace Makdon;`), indentasi 4 spasi, field privat tanpa awalan `_`, kelas
-  `sealed`/`static` bila memungkinkan, `internal` untuk yang tak perlu publik (tersedia untuk test lewat `InternalsVisibleTo`).
-  Tidak ada aturan tertulis; ikuti berkas di sekitar perubahan.
-- **Penyimpanan file** selalu lewat `TextFileIO.Write` (atomik, mempertahankan encoding/BOM). **Pembukaan dokumen** hanya lewat
-  `MainWindow.OpenFile`.
-- **Pratinjau vs ekspor** memakai pipeline berbeda (`MarkdownSupport.Pipeline` vs `ExportPipeline` + `SanitizeForExport`).
-- Pesan commit: tidak ada konvensi tertulis; riwayat saat ini satu commit berbahasa Indonesia. Jangan commit/push kecuali diminta.
+- **Language:** UI text, error messages, and code comments are in **Indonesian**; identifier names are in **English**. Documentation (`README.md`, `CLAUDE.md`, `docs/`) is in **English**; `README.id.md` is the Indonesian version of `README.md`, and both must be updated together.
+- **Nullable and ImplicitUsings are enabled**; the build must not produce warnings (`System.IO` is added via `<Using>` in the csproj).
+- **Comments explain the reason (why)**, not repeat the code. Example style: the comments above non-obvious decisions such as `DocumentTab.cs:33-36` and `TextFileIO.cs:145`.
+- **Do not add features beyond the request.** Findings outside the task are reported, not fixed along the way.
+- **Catch specific exceptions**, not a bare `catch (Exception)`: `catch (Exception ex) when (ex is IOException or
+  UnauthorizedAccessException ...)`. Recoverable I/O errors are shown to the user; unexpected errors are logged to `CrashLog`.
+  The deliberate exceptions (HTML export and print catch everything except OOM; `PreviewBuild.Guard` catches everything **including** OOM,
+  [ADR-25](DESIGN-DECISIONS.md#adr-25-preview-errors-wrapped-in-guard-and-xps-package-cleaned-up-after-idle)) have comments explaining them.
+- **Low-level helpers that "never throw"** (`AppSettings.Load/Save`, `CrashLog.Write`, `SingleInstance`) state this in their XML summary; keep that property when changing them.
+- Visible style: file-scoped namespaces (`namespace Makdon;`), 4-space indentation, private fields without a `_` prefix, classes `sealed`/`static` where possible, `internal` for anything that does not need to be public (visible to tests through `InternalsVisibleTo`).
+  There is no written rule; follow the files around the change.
+- **File saving** always goes through `TextFileIO.Write` (atomic, keeps encoding/BOM). **Document opening** only through `MainWindow.OpenFile`.
+- **Preview vs export** use different pipelines (`MarkdownSupport.Pipeline` vs `ExportPipeline` + `SanitizeForExport`).
+- Commit messages: there is no written convention; the existing history is written in Indonesian. Do not commit/push unless asked.
 
-## 4. Cara menulis test
+## 4. Writing tests
 
-Kerangka: xUnit 2.9.2 + `Microsoft.NET.Test.Sdk` 17.12.0 + coverlet.collector (`Makdon.Tests.csproj`), target
-`net10.0-windows`, `UseWPF`. `Xunit` dan `System.IO` sudah `<Using>` global.
+Framework: xUnit 2.9.2 + `Microsoft.NET.Test.Sdk` 17.12.0 + coverlet.collector (`Makdon.Tests.csproj`), target
+`net10.0-windows`, `UseWPF`. `Xunit` and `System.IO` are already global `<Using>`s.
 
-### 4.1 Pola yang dipakai
+### 4.1 Patterns in use
 
-| Kebutuhan | Pakai | Catatan |
+| Need | Use | Notes |
 | --- | --- | --- |
-| Menyentuh WPF (`DocumentTab`, `DocumentView`, `FindReplaceBar`, `ChoiceDialog`, `ThemeManager.Apply`, `TextEditor`; tipe cetak: `PrintPreviewWindow`, `PreviewBuild`, `HeaderFooterPaginator`, `FlowDocument` hasil `PrintService.CreateDocument`, `DocumentViewer`, `FixedDocumentSequence`, `PrintTicket`) | `WpfHost.Instance.Run(...)` + `[Collection("Wpf")]` pada kelas | `WpfHost` = satu thread STA dengan `Dispatcher` dan satu `App` (`ShutdownMode.OnExplicitShutdown`, resource tema dimuat, `OnStartup` tidak dipanggil). Koleksi `Wpf` mematikan paralelisasi (`MarkdownEditingTests.cs:942`). `DocumentTab` menangkap `Dispatcher.CurrentDispatcher`, jadi **buat di dalam `Run`**; `PreviewBuild` juga (`Dispatcher.CurrentDispatcher` di field-nya). Tipe non-WPF murni (`PageLayout.For`/`MarginOf`/`FromPrintableArea`, `PrintPreviewWindow.TicketMatches`/`ApplyTicket` pada `PrintTicket` terpisah) tidak butuh `Run`, tetapi kelas yang memuatnya di repo ini tetap `[Collection("Wpf")]`. |
-| Test cetak: dokumen contoh, halaman kecil, menunggu tahap, membaca teks halaman XPS | `Support/PrintTestKit` (`using static Makdon.Tests.Support.PrintTestKit;`) | `Small` (360 x 420, margin 24), `Sample`, `Paragraphs(n)` (banyak halaman `Small`), `Pages(n)` (banyak halaman A4), `StartBuild`, `WaitForEnd`/`WaitForPaginated` (memakai `UiPump.Until` dengan batas `Patience` 15 dtk), `GlyphTexts` (teks halaman XPS), `FooterTexts` (teks kaki halaman), `Paginator`. |
-| Menguji bahwa callback dispatcher melempar (galat yang memang diharapkan) | `using (var scope = WpfHost.ExpectUnhandled()) { ... }` lalu periksa `scope.Errors` | Tanpa scope, galat yang lolos ke dispatcher menggagalkan test lewat `[assembly: FailOnUnexpectedDispatcherErrors]` (`Support/AssemblyInfo.cs`). Untuk menegaskan "tidak ada galat lolos": `var before = WpfHost.Unhandled.Count; ...; Assert.Equal(before, WpfHost.Unhandled.Count);`. Lihat [TESTING.md](TESTING.md#thread-sta-dan-wpfhost). |
-| File/folder sementara | `TempDir` (`new TempDir()`, `File`, `WriteText`, `WriteBytes`, `Entries`; `Dispose` menghapus) | Lokasi `%TEMP%\Makdon.Tests\<guid>`. Pakai `Entries()` untuk menegaskan tidak ada sisa `~md*.tmp`. |
-| Mengalihkan `crash.log` | `TestLogRedirect` (`[ModuleInitializer]`) | Otomatis berlaku untuk seluruh assembly test; tidak perlu dipanggil. Log test: `%TEMP%\Makdon.Tests\crash-<pid>.log`. |
-| Menunggu event async/timer di dalam satu test STA | `UiPump.For(TimeSpan)` / `UiPump.Until(cond, timeout)` | Didefinisikan di `DocumentViewLifecycleTests.cs:14-41`; memompa dispatcher (`DispatcherFrame`). `UiPump.IsTimerEnabled(owner, "namaField")` membaca **field privat** lewat refleksi (`statsTimer`, `renderTimer`, `queryTimer`, `refreshTimer`): jangan ganti nama field itu tanpa memperbarui test. |
-| Single-instance | `SingleInstance.Create("test-" + Guid.NewGuid().ToString("N"))` | Scope unik supaya mutex/pipe tidak bentrok dengan aplikasi asli atau test lain. |
-| Pengaturan | `AppSettings.Load(path)`, `Save(path)`, `SaveMerged(path)` dengan path di `TempDir` | **Jangan** memakai `AppSettings.DefaultPath`/`Load()` tanpa argumen. |
+| Touching WPF (`DocumentTab`, `DocumentView`, `FindReplaceBar`, `ChoiceDialog`, `ThemeManager.Apply`, `TextEditor`; print types: `PrintPreviewWindow`, `PreviewBuild`, `HeaderFooterPaginator`, the `FlowDocument` returned by `PrintService.CreateDocument`, `DocumentViewer`, `FixedDocumentSequence`, `PrintTicket`) | `WpfHost.Instance.Run(...)` + `[Collection("Wpf")]` on the class | `WpfHost` = one STA thread with a `Dispatcher` and one `App` (`ShutdownMode.OnExplicitShutdown`, theme resources loaded, `OnStartup` not called). The `Wpf` collection disables parallelization (`MarkdownEditingTests.cs:942`). `DocumentTab` captures `Dispatcher.CurrentDispatcher`, so **create it inside `Run`**; `PreviewBuild` as well (`Dispatcher.CurrentDispatcher` in its field). Pure non-WPF types (`PageLayout.For`/`MarginOf`/`FromPrintableArea`, `PrintPreviewWindow.TicketMatches`/`ApplyTicket` on a separate `PrintTicket`) do not need `Run`, but classes that load them in this repo still use `[Collection("Wpf")]`. |
+| Print tests: sample documents, small pages, waiting for stages, reading XPS page text | `Support/PrintTestKit` (`using static Makdon.Tests.Support.PrintTestKit;`) | `Small` (360 x 420, margin 24), `Sample`, `Paragraphs(n)` (many `Small` pages), `Pages(n)` (many A4 pages), `StartBuild`, `WaitForEnd`/`WaitForPaginated` (use `UiPump.Until` with a `Patience` limit of 15 s), `GlyphTexts` (XPS page text), `FooterTexts` (page footer text), `Paginator`. |
+| Testing that a dispatcher callback throws (an expected error) | `using (var scope = WpfHost.ExpectUnhandled()) { ... }`, then check `scope.Errors` | Without a scope, an error that reaches the dispatcher fails the test through `[assembly: FailOnUnexpectedDispatcherErrors]` (`Support/AssemblyInfo.cs`). To assert that "no error escaped": `var before = WpfHost.Unhandled.Count; ...; Assert.Equal(before, WpfHost.Unhandled.Count);`. See [TESTING.md](TESTING.md#sta-thread-and-wpfhost). |
+| Temporary files/folders | `TempDir` (`new TempDir()`, `File`, `WriteText`, `WriteBytes`, `Entries`; `Dispose` deletes) | Location `%TEMP%\Makdon.Tests\<guid>`. Use `Entries()` to assert that no `~md*.tmp` leftovers remain. |
+| Redirecting `crash.log` | `TestLogRedirect` (`[ModuleInitializer]`) | Applies automatically to the whole test assembly; no need to call it. Test log: `%TEMP%\Makdon.Tests\crash-<pid>.log`. |
+| Waiting for async events/timers inside one STA test | `UiPump.For(TimeSpan)` / `UiPump.Until(cond, timeout)` | Defined in `DocumentViewLifecycleTests.cs:14-41`; pumps the dispatcher (`DispatcherFrame`). `UiPump.IsTimerEnabled(owner, "fieldName")` reads **private fields** through reflection (`statsTimer`, `renderTimer`, `queryTimer`, `refreshTimer`): do not rename those fields without updating the tests. |
+| Single instance | `SingleInstance.Create("test-" + Guid.NewGuid().ToString("N"))` | A unique scope so the mutex/pipe does not collide with the real application or other tests. |
+| Settings | `AppSettings.Load(path)`, `Save(path)`, `SaveMerged(path)` with a path in `TempDir` | **Do not** use `AppSettings.DefaultPath`/`Load()` without arguments. |
 
-Kerangka test yang menyentuh WPF (pola dari `DocumentTabTests.cs:13-47`):
+Skeleton of a test that touches WPF (pattern from `DocumentTabTests.cs:13-47`):
 
 ```csharp
 [Collection("Wpf")]
@@ -110,7 +101,7 @@ public class ContohTests : IDisposable
     {
         WpfHost.Instance.Run(() => { foreach (var t in tabs) t.Dispose(); });
         tabs.Clear();
-        GC.Collect();                 // BitmapImage menahan handle file gambar sampai di-GC
+        GC.Collect();                 // BitmapImage holds the image file handle until GC
         GC.WaitForPendingFinalizers();
         dir.Dispose();
     }
@@ -131,200 +122,164 @@ public class ContohTests : IDisposable
 }
 ```
 
-### 4.2 Aturan
+### 4.2 Rules
 
-1. **Jangan menyentuh data pengguna asli.** Test tidak boleh membaca/menulis `%APPDATA%`, `%LOCALAPPDATA%` (kecuali lewat
-   `TestLogRedirect`), maupun registri, dan tidak boleh menjalankan skrip registri sungguhan. Pengecualian: **membaca**
-   `HKCU\...\Personalize\AppsUseLightTheme` untuk tema diperbolehkan. Empat test melakukannya lewat
-   `ThemeManager.SystemUsesLightTheme()`: `SystemUsesLightTheme_ReadsRegistryWithoutThrowing` (`SmallUtilityTests.cs:241`) dan tiga test
-   `ThemeManagerApplyTests` yang memanggil `ThemeManager.Apply` (`DocumentTabTests.cs:1060, 1097, 1117`; `Apply` selalu membaca nilai itu,
-   sedangkan `Shutdown_WithoutApply_OrTwice_DoesNotThrow` tidak); tidak ada yang menulis. Satu test sengaja membandingkan ukuran `crash.log`
-   asli sebelum/sesudah untuk membuktikan tidak tersentuh (`IoAndUtilityCoverageTests.cs:647`).
-2. **State global statis harus dipulihkan** di `finally`: `DocumentView.BlockRemoteImages`, `ThemeManager` (panggil `Apply(Light)`
-   dan `Shutdown()`), `CrashLog.LogPath`, `CultureInfo.CurrentCulture`. Kelas di koleksi berbeda dapat berjalan paralel.
-3. **Hindari `Thread.Sleep` dan jeda tetap.** Pilih urutan deterministik: panggil `CheckExternalChange()` langsung (bukan menunggu
-   `FileSystemWatcher` + timer 400 ms), `RefreshPreview()` eksplisit, `UiPump.Until(kondisi, timeout)` dengan batas atas,
-   `BlockingCollection.TryTake(timeout)` / `Task.WaitAsync`. Jujur soal kondisi sekarang: masih ada jeda tetap pada
-   `UiPump.For(...)` (7 pemanggilan di `DocumentViewLifecycleTests.cs`, dipakai untuk membuktikan "tidak ada yang terjadi setelah
-   debounce"; test cetak menambah 41 pemanggilan: 17 di `PreviewBuildTests`, 19 di `PrintPreviewWindowBehaviorTests`, 3 di
-   `PrintContentAndCommandTests`, 1 di `PrintPreviewTests`, 1 di `WpfHostErrorTrackingTests`, umumnya untuk memberi waktu pada callback sisa setelah
-   `Dispose` atau pada pemuat gambar), `Thread.Sleep` pada 4 tempat di `SingleInstanceServerTests.cs` dan 1 di `IoAndUtilityCoverageTests.cs:108` (polling
-   dengan batas 5 dtk). Itu pengecualian; jangan menambah yang baru bila ada pilihan deterministik.
-4. **Uji perilaku, bukan implementasi** (arahan agen `kurang-kerjaan`): cakup jalur normal, edge case, dan error path (file
-   terkunci lewat `FileShare.None`, folder tak ada, direktori sebagai target, input kosong/null).
-5. **Tipe yang test butuhkan harus bisa dijangkau:** `internal` terlihat karena `InternalsVisibleTo("Makdon.Tests")`
-   (`AssemblyInfo.cs:4`). `x:Name` XAML (mis. `FindBox`, `CountText`, `ReplaceRow`, `ButtonPanel`, `MessageText`) dipakai test; mengubah
-   nama/hapus mempengaruhi test. Jendela Pratinjau Cetak sama: test mencari `Viewer`, `PageBox`, `PrintButton`, `BusyPanel`, `BusyText`,
-   `BusyDetail`, `FooterCheck`, `*Button` (orientasi/kertas/margin/navigasi/zoom) lewat `FindName`. Beberapa test cetak juga membaca
-   anggota **privat** `PreviewBuild` lewat refleksi (`counter`, `packageUri`, `cleanupScheduled`, metode `Cleanup`;
-   `PreviewBuildTests.cs:15-16, 430, 544-545, 590, 601`) dan membaca teks `MainWindow.xaml` dengan regex (`PrintContentAndCommandTests.cs:333, 369`).
-6. **Test symlink/ACL:** test symlink keluar diam-diam (return) bila mesin tidak boleh membuat symlink; test fallback `WriteInPlace`
-   memakai ACL deny `CreateFiles` pada folder temp dan memulihkannya di `finally` (tidak butuh admin).
-7. **Test yang belum pernah dijalankan dianggap belum selesai** (arahan `kurang-kerjaan`). Jalankan `dotnet test` sebelum PR.
-8. **Test cetak tanpa printer fisik dan tanpa dialog sungguhan.** Jangan membuka `PrintDialog`, `MessageBox`, atau `ChoiceDialog` dari test (dialog
-   modal menggantung proses test) dan jangan mencetak ke printer atau ke "Microsoft Print to PDF". Jalur Cetak di `PrintPreviewWindow` diuji lewat
-   hook `ShowPrintDialogForTests` (mengembalikan `false` = batal; `PrintPreviewWindowBehaviorTests.cs:889, 921`); logika kertas/orientasi diuji lewat
-   pembantu statis `TicketMatches`/`ApplyTicket`/`DescribeTicket` pada `PrintTicket` buatan sendiri. Kegagalan render dipaksa lewat
-   `DocumentView.RenderFaultForTests` (**kembalikan ke `null` di `finally`**). Test yang memang mengharapkan callback dispatcher melempar membungkusnya
-   dengan `WpfHost.ExpectUnhandled()`. Tunggu kondisi dengan `UiPump.Until(cond, PrintTestKit.Patience)`, bukan jeda tetap. Pola yang dipakai test yang
-   ada: jendela ditutup di `Dispose` kelas test dan `PreviewBuild` di-`Dispose`, supaya paket XPS dan timer tidak tertinggal ke test berikutnya.
-9. **Dokumen cetak tidak boleh memuat path lokal.** Jalur cetak tidak boleh memakai `CreateErrorDocument` (memuat `CrashLog.LogPath`); kegagalan render harus
-   dilempar (`throwOnFailure: true`) dan ditampilkan di layar. Kaki halaman hanya memuat nama berkas. Lihat [SECURITY.md](SECURITY.md#212-pratinjau-cetak-dan-cetak).
-10. **Lokasi data dan registri lewat seam.** `settings.json` dan `crash.log` hanya lewat `AppPaths`; test menyuntikkan folder palsu lewat `AppPaths.Detect(folder, markerExists: ...)`. `FileAssociation` hanya menulis lewat `IRegistryStore`; test memakai `FakeRegistryStore`. Jangan memanggil `Environment.GetFolderPath` atau `Microsoft.Win32.Registry` langsung dari kode yang diuji.
-11. **Host test WPF tidak menjalankan `App.OnStartup`.** Jangan mengganti `WpfHost.TestApp` dengan `App` biasa: startup sungguhan membuat mutex/pipe produksi, `MainWindow`, dan membaca settings pengguna ([ADR-33](DESIGN-DECISIONS.md#adr-33-wpfhost-memakai-testapp-tanpa-onstartup)).
+1. **Do not touch the real user data.** Tests must not read/write `%APPDATA%`, `%LOCALAPPDATA%` (except through
+   `TestLogRedirect`), or the registry, and must not run real registry scripts. Exception: **reading**
+   `HKCU\...\Personalize\AppsUseLightTheme` for the theme is allowed. Four tests do it through
+   `ThemeManager.SystemUsesLightTheme()`: `SystemUsesLightTheme_ReadsRegistryWithoutThrowing` (`SmallUtilityTests.cs:241`) and three
+   `ThemeManagerApplyTests` tests that call `ThemeManager.Apply` (`DocumentTabTests.cs:1060, 1097, 1117`; `Apply` always reads that value,
+   whereas `Shutdown_WithoutApply_OrTwice_DoesNotThrow` does not); none writes. One test deliberately compares the real `crash.log` size before and after to prove it is untouched (`IoAndUtilityCoverageTests.cs:647`).
+2. **Global static state must be restored** in `finally`: `DocumentView.BlockRemoteImages`, `ThemeManager` (call `Apply(Light)`
+   and `Shutdown()`), `CrashLog.LogPath`, `CultureInfo.CurrentCulture`. Classes in different collections may run in parallel.
+3. **Avoid `Thread.Sleep` and fixed delays.** Choose deterministic sequences: call `CheckExternalChange()` directly (not wait for the
+   `FileSystemWatcher` + 400 ms timer), call `RefreshPreview()` explicitly, use `UiPump.Until(condition, timeout)` with an upper bound,
+   or `BlockingCollection.TryTake(timeout)` / `Task.WaitAsync`. Honest about the current state: there are still fixed delays in
+   `UiPump.For(...)` (7 calls in `DocumentViewLifecycleTests.cs`, used to prove "nothing happens after the debounce"; the print tests add 41 calls: 17 in `PreviewBuildTests`, 19 in `PrintPreviewWindowBehaviorTests`, 3 in `PrintContentAndCommandTests`, 1 in `PrintPreviewTests`, 1 in `WpfHostErrorTrackingTests`, mostly to give time to leftover callbacks after `Dispose` or to the image loader), and `Thread.Sleep` in 4 places in `SingleInstanceServerTests.cs` and 1 in `IoAndUtilityCoverageTests.cs:108` (polling with a 5-second limit). Those are exceptions; do not add new ones when a deterministic option exists.
+4. **Test behavior, not implementation** (guidance of the `kurang-kerjaan` agent): cover the normal path, edge cases, and error paths (file locked with `FileShare.None`, missing folder, a directory as target, empty/null input).
+5. **Types the tests need must be reachable:** `internal` is visible because of `InternalsVisibleTo("Makdon.Tests")` (`AssemblyInfo.cs:4`). XAML `x:Name`s (e.g. `FindBox`, `CountText`, `ReplaceRow`, `ButtonPanel`, `MessageText`) are used by tests; renaming or removing them affects tests. The Print Preview window is the same: tests find `Viewer`, `PageBox`, `PrintButton`, `BusyPanel`, `BusyText`,
+   `BusyDetail`, `FooterCheck`, and `*Button` (orientation/paper/margin/navigation/zoom) through `FindName`. Some print tests also read **private** members of `PreviewBuild` through reflection (`counter`, `packageUri`, `cleanupScheduled`, method `Cleanup`;
+   `PreviewBuildTests.cs:15-16, 430, 544-545, 590, 601`) and read the text of `MainWindow.xaml` with a regex (`PrintContentAndCommandTests.cs:333, 369`).
+6. **Symlink/ACL tests:** a symlink-outside test silently returns if the machine is not allowed to create symlinks; the `WriteInPlace` fallback test uses an ACL deny on `CreateFiles` on the temp folder and restores it in `finally` (no admin rights needed).
+7. **A test that has never been run is considered unfinished** (guidance of `kurang-kerjaan`). Run `dotnet test` before a PR.
+8. **Print tests use no physical printer and no real dialog.** Do not open `PrintDialog`, `MessageBox`, or `ChoiceDialog` from a test (a modal dialog hangs the test process), and do not print to a printer or to "Microsoft Print to PDF". The print path in `PrintPreviewWindow` is tested through the hook `ShowPrintDialogForTests` (returns `false` = cancel; `PrintPreviewWindowBehaviorTests.cs:889, 921`); paper/orientation logic is tested through the static helpers `TicketMatches`/`ApplyTicket`/`DescribeTicket` on a self-built `PrintTicket`. Render failures are forced through `DocumentView.RenderFaultForTests` (**reset it to `null` in `finally`**). A test that expects the dispatcher callback to throw wraps it with `WpfHost.ExpectUnhandled()`. Wait for conditions with `UiPump.Until(cond, PrintTestKit.Patience)`, not fixed delays. The pattern used by existing print tests: the window is closed in the test class's `Dispose`, and `PreviewBuild` is disposed, so XPS packages and timers do not leak into the next test.
+9. **A print document must not contain local paths.** The print path must not use `CreateErrorDocument` (it includes `CrashLog.LogPath`); a render failure must throw (`throwOnFailure: true`) and be shown on screen. The page footer holds only the file name. See [SECURITY.md](SECURITY.md#212-print-preview-and-print).
+10. **Data locations and the registry go through seams.** `settings.json` and `crash.log` are accessed only through `AppPaths`; tests inject a fake folder through `AppPaths.Detect(folder, markerExists: ...)`. `FileAssociation` writes only through `IRegistryStore`; tests use `FakeRegistryStore`. Do not call `Environment.GetFolderPath` or `Microsoft.Win32.Registry` directly from code under test.
+11. **The WPF test host does not run `App.OnStartup`.** Do not replace `WpfHost.TestApp` with a regular `App`: a real startup creates the production mutex/pipe, `MainWindow`, and reads the user's settings ([ADR-33](DESIGN-DECISIONS.md#adr-33-wpfhost-uses-testapp-without-onstartup)).
 
-## 5. Cara menambah
+## 5. How to add things
 
-### Menambah tema/kunci brush baru
+### Adding a theme/brush key
 
-Brush semantik berada di `Themes/Light.xaml` dan `Themes/Dark.xaml` (masing-masing 43 kunci saat ini).
+Semantic brushes are in `Themes/Light.xaml` and `Themes/Dark.xaml` (43 keys each at present).
 
-1. Tambahkan `<SolidColorBrush x:Key="NamaBrush" Color="#RRGGBB" />` ke **kedua** berkas dengan kunci **persis sama** (komentar di
-   kedua berkas: "Kunci harus sama persis"). Kunci yang hanya ada di satu kamus gagal saat dijalankan di tema lainnya, termasuk saat
-   mencetak (cetak memuat `Light.xaml` lewat `ThemeManager.LoadDictionary(dark: false)`).
-2. Pakai di XAML dengan `{DynamicResource NamaBrush}` (jangan `StaticResource`: tidak ikut berganti tema).
-3. Di kode, ambil lewat `TryFindResource`/`SetResourceReference` (contoh `DocumentView.ConfigureEditorAppearance`,
-   `FindReplaceBar` -> `SearchMatchBrush`/`SearchCurrentBrush`). Properti AvalonEdit yang bukan dependency property biasa perlu
-   diterapkan ulang di `DocumentView.RefreshTheme` (dipanggil `MainWindow.OnThemeChanged`).
-4. Warna sintaks Markdown baru: tambahkan `Syntax*Brush` lalu satu baris `Set(definition, "NamaWarnaDiDefinisi", "Syntax*Brush", ...)`
-   di `EditorTheme.ApplyMarkdownHighlighting` (`EditorTheme.cs:33-38`). Semua warna highlight otomatis dijaga kontrasnya >= 4,5:1
-   (`EnsureContrast`); warna teks lain di kamus tema disarankan memenuhi rasio yang sama (komentar kamus).
-5. **Periksa kesamaan kunci** (tidak ada test otomatis untuk ini; perintah ini sudah dicoba di Git Bash dan menghasilkan diff kosong
-   saat ini):
+1. Add `<SolidColorBrush x:Key="NamaBrush" Color="#RRGGBB" />` to **both** files with the **exact same** key (comment in
+   both files: "Kunci harus sama persis" = keys must match exactly). A key that exists in only one dictionary fails at runtime in the other theme, including when printing (printing loads `Light.xaml` through `ThemeManager.LoadDictionary(dark: false)`).
+2. Use it in XAML with `{DynamicResource NamaBrush}` (not `StaticResource`: it does not change with the theme).
+3. In code, get it through `TryFindResource`/`SetResourceReference` (examples: `DocumentView.ConfigureEditorAppearance`,
+   `FindReplaceBar` -> `SearchMatchBrush`/`SearchCurrentBrush`). AvalonEdit properties that are not regular dependency properties must be reapplied in `DocumentView.RefreshTheme` (called by `MainWindow.OnThemeChanged`).
+4. New Markdown syntax color: add a `Syntax*Brush`, then one line `Set(definition, "NamaWarnaDiDefinisi", "Syntax*Brush", ...)` in `EditorTheme.ApplyMarkdownHighlighting` (`EditorTheme.cs:33-38`). All highlight colors are automatically kept at contrast >= 4.5:1 (`EnsureContrast`); other text colors in the theme dictionary should preferably meet the same ratio (dictionary comment).
+5. **Check that the keys match** (there is no automated test for this; the command below was tried in Git Bash and produced an empty diff at the time):
 
    ```bash
-   diff <(grep -o 'x:Key="[^"]*"' src/Makdon/Themes/Light.xaml) <(grep -o 'x:Key="[^"]*"' src/Makdon/Themes/Dark.xaml) && echo SAMA
+   diff <(grep -o 'x:Key="[^"]*"' src/Makdon/Themes/Light.xaml) <(grep -o 'x:Key="[^"]*"' src/Makdon/Themes/Dark.xaml) && echo SAME
    ```
 
-6. Pratinjau: gaya `Styles.*` Markdig.Wpf ditimpa di `Themes/Preview.xaml` (warna lewat brush `Preview*`). Gaya kontrol di `Controls.xaml`.
+6. Preview: the Markdig.Wpf `Styles.*` are overridden in `Themes/Preview.xaml` (colors through the `Preview*` brushes). Control styles are in `Controls.xaml`.
 
-Menambah **tema ketiga** (selain Terang/Gelap) bukan sekadar menambah berkas: `ThemeManager.LoadDictionary(bool dark)`,
-`ResolveIsDark` (hasil boolean), `IsDark`, `UpdateThemeChecks`, item menu Tema di `MainWindow.xaml`, dan `AppThemeMode` semuanya
-mengasumsikan dua kamus. Perlu perancangan ulang dan test baru (`ThemeManagerPureTests`, `ThemeManagerApplyTests`, `AppSettingsTests`).
+Adding a **third theme** (beyond Light/Dark) is not just adding a file: `ThemeManager.LoadDictionary(bool dark)`,
+`ResolveIsDark` (boolean result), `IsDark`, `UpdateThemeChecks`, the Theme menu item in `MainWindow.xaml`, and `AppThemeMode` all assume two dictionaries. It needs a redesign and new tests (`ThemeManagerPureTests`, `ThemeManagerApplyTests`, `AppSettingsTests`).
 
-### Menambah perintah/pintasan baru
+### Adding a command/shortcut
 
-1. `AppCommands.cs`: tambahkan `public static readonly RoutedUICommand` lewat `Create(teks, nama, gestur...)`. Gestur masuk ke menu
-   otomatis sebagai teks pintasan. (Perintah bawaan `ApplicationCommands.*` tidak perlu dibuat ulang.)
-2. `MainWindow.xaml`: tambahkan `<CommandBinding Command="{x:Static local:AppCommands.NamaBaru}" Executed="..." CanExecute="..."/>`
-   di `Window.CommandBindings`. `HasTab_CanExecute` (butuh tab), `CanEdit_CanExecute` (editor tampak), `CanFormat_CanExecute`
-   (editor tampak dan fokus bukan di panel cari) sudah ada.
-3. Tulis handler di `MainWindow.xaml.cs`. Bila menyentuh dokumen, lewat `Current` (`DocumentTab`) / `Current.View`.
-4. Tambahkan `MenuItem Command="..."` (dan tombol toolbar bila perlu). Pintasan yang didefinisikan lewat `Window.InputBindings`
-   (bukan `AppCommands`) tidak muncul otomatis di menu; isi `InputGestureText` manual (contoh: Ctrl+W, Ctrl+Shift+S).
-5. Periksa bentrok dengan pintasan bawaan WPF/AvalonEdit dan tabel pintasan di [../README.md](../README.md); perbarui README. Pintasan
-   ganda di `AppCommands`, `CommandBinding` standar, dan `KeyBinding` di `MainWindow.xaml` ditangkap otomatis oleh
-   `NoTwoAppCommands_ShareTheSameKeyGesture` dan `MainWindowShortcuts_AreUnique_*` (`PrintContentAndCommandTests.cs:319, 333`).
-6. Bila memperlihatkan dialog, jangan dari event; pakai `ChoiceDialog` dan, untuk konflik, `conflictQueue` (lihat larangan di bawah).
+1. `AppCommands.cs`: add a `public static readonly RoutedUICommand` through `Create(text, name, gestures...)`. Gestures go into the menu automatically as shortcut text. (Built-in `ApplicationCommands.*` do not need to be recreated.)
+2. `MainWindow.xaml`: add `<CommandBinding Command="{x:Static local:AppCommands.NamaBaru}" Executed="..." CanExecute="..."/>`
+   in `Window.CommandBindings`. `HasTab_CanExecute` (needs a tab), `CanEdit_CanExecute` (editor visible), and `CanFormat_CanExecute`
+   (editor visible and focus not in the find panel) already exist.
+3. Write the handler in `MainWindow.xaml.cs`. If it touches the document, go through `Current` (`DocumentTab`) / `Current.View`.
+4. Add a `MenuItem Command="..."` (and a toolbar button if needed). A shortcut defined through `Window.InputBindings`
+   (not `AppCommands`) does not appear automatically in the menu; fill in `InputGestureText` manually (examples: Ctrl+W, Ctrl+Shift+S).
+5. Check for conflicts with built-in WPF/AvalonEdit shortcuts and with the shortcut table in [../README.md](../README.md); update the README. Duplicate shortcuts across `AppCommands`, standard `CommandBinding`s, and `KeyBinding`s in `MainWindow.xaml` are caught automatically by `NoTwoAppCommands_ShareTheSameKeyGesture` and `MainWindowShortcuts_AreUnique_*` (`PrintContentAndCommandTests.cs:319, 333`).
+6. If showing a dialog, do not do it from an event; use `ChoiceDialog` and, for conflicts, `conflictQueue` (see the prohibitions below).
 
-### Menambah mode tampilan
+### Adding a view mode
 
-Mode saat ini: `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Titik yang harus disentuh:
+The current mode is `ViewMode { Edit, Split, Preview }` (`DocumentTab.cs:8`). Places to touch:
 
-- `DocumentView.ApplyMode`, `PreviewVisible`, dan semua cabang `tab.Mode == ViewMode.Preview/Split/Edit` (`ShowFind`, `FindNext`,
-  `ApplyFormat`, sinkron scroll `OnEditorScroll`/`OnPreviewScroll`, `ApplyParsed`).
-- `MainWindow.xaml`: `RoutedUICommand` + `CommandBinding` + `KeyBinding` (Ctrl+1/2/3 saat ini) + item menu + `RadioButton`
-  segmented control (`ViewModeConverter` dengan `ConverterParameter` = nama enum).
-- `MainWindow.ViewMode_Executed` memetakan **teks** `RoutedUICommand` ("Editor", "Pratinjau", selain itu Terpisah)
-  (`MainWindow.xaml.cs:795-804`): tambahkan cabangnya, atau ubah ke pemetaan yang eksplisit.
+- `DocumentView.ApplyMode`, `PreviewVisible`, and all branches `tab.Mode == ViewMode.Preview/Split/Edit` (`ShowFind`, `FindNext`,
+  `ApplyFormat`, scroll sync `OnEditorScroll`/`OnPreviewScroll`, `ApplyParsed`).
+- `MainWindow.xaml`: `RoutedUICommand` + `CommandBinding` + `KeyBinding` (Ctrl+1/2/3 currently) + menu item + `RadioButton`
+  segmented control (`ViewModeConverter` with `ConverterParameter` = the enum name).
+- `MainWindow.ViewMode_Executed` maps the **text** of the `RoutedUICommand` ("Editor", "Pratinjau", otherwise Split)
+  (`MainWindow.xaml.cs:795-804`): add the new branch, or change it to an explicit mapping.
 - `ViewModeLabelConverter`, `EditorVisibleConverter` (`Converters.cs`), `CanEdit_CanExecute`/`CanFormat_CanExecute`.
-- Sesi: `SessionTab.Mode` disimpan sebagai teks nama enum dan `ParsedMode` jatuh ke `Split` untuk nilai tak dikenal
-  (`AppSettings.cs:15`). **Mengganti nama anggota enum yang ada membuat sesi lama kembali ke Terpisah.**
-- Test: `ConverterTests` (`SmallUtilityTests.cs:393`), `SessionTab_ParsedMode_FallsBackToSplit` (`AppSettingsTests.cs:248`),
-  `DocumentViewLifecycleTests`. README (fitur dan pintasan).
+- Sessions: `SessionTab.Mode` is stored as the enum name text, and `ParsedMode` falls back to `Split` for unknown values
+  (`AppSettings.cs:15`). **Renaming an existing enum member makes old sessions fall back to Split.**
+- Tests: `ConverterTests` (`SmallUtilityTests.cs:393`), `SessionTab_ParsedMode_FallsBackToSplit` (`AppSettingsTests.cs:248`),
+  `DocumentViewLifecycleTests`. README (features and shortcuts).
 
-### Menambah ekstensi file Markdown
+### Adding a Markdown file extension
 
-1. `MarkdownFiles.Extensions` (`MarkdownFiles.cs:5`): dipakai seret-lepas dan klik tautan relatif. Saat ini `.md .markdown .mdown
+1. `MarkdownFiles.Extensions` (`MarkdownFiles.cs:5`): used by drag-and-drop and relative-link clicks. Currently `.md .markdown .mdown
    .mkd .txt`.
-2. Filter dialog `OpenFilter`/`SaveFilter` di `MainWindow.xaml.cs:16-17` (string terpisah; `.txt` ada di filter sendiri).
-3. Asosiasi file: default `-Extensions` di `scripts/register-file-association.ps1` dan `unregister-file-association.ps1` adalah
-   `.md` dan `.markdown`; `-Extensions` dinormalkan ke huruf kecil lalu divalidasi `^\.[a-z0-9]+$`.
-4. Test: `MarkdownFilesTests.IsMarkdown_ByExtension` (`HtmlAndMarkdownSupportTests.cs:9-31`). README (Asosiasi file).
+2. The `OpenFilter`/`SaveFilter` dialog filters in `MainWindow.xaml.cs:16-17` (separate strings; `.txt` has its own filter).
+3. File association: the defaults of `-Extensions` in `scripts/register-file-association.ps1` and `unregister-file-association.ps1` are
+   `.md` and `.markdown`; `-Extensions` is normalized to lowercase and validated with `^\.[a-z0-9]+$`.
+4. Test: `MarkdownFilesTests.IsMarkdown_ByExtension` (`HtmlAndMarkdownSupportTests.cs:9-31`). README (file association).
 
-### Menambah format toolbar
+### Adding a toolbar format
 
-1. `MarkdownEditing.cs`: tambah anggota `MarkdownFormat` (`:7`), fungsi pada `TextDocument` yang dibungkus
-   `document.BeginUpdate()/EndUpdate()` (supaya satu langkah Undo) dan mengembalikan `SelectionRange` hasil, lalu cabang di
+1. `MarkdownEditing.cs`: add a `MarkdownFormat` member (`:7`), a function on `TextDocument` wrapped in
+   `document.BeginUpdate()/EndUpdate()` (so it is one Undo step) that returns the resulting `SelectionRange`, and a branch in
    `MarkdownEditing.Apply` (`:34-45`).
-2. `AppCommands.cs`: perintah baru + cabang di `AppCommands.FormatOf`.
-3. `MainWindow.xaml`: `CommandBinding` (pakai `Format_Executed` dan `CanFormat_CanExecute`), tombol di `ToolBar` (blok yang visible
-   saat editor tampak), dan item menu Edit > Format. Heading memakai `CommandParameter` sebagai level.
-4. Test: `MarkdownEditingInlineTests/LineTests/LinkTests` (tanpa UI, `TextDocument` biasa) dan `MarkdownEditingApplyTests`
-   (`TextEditor` di `WpfHost`). README (fitur dan pintasan).
+2. `AppCommands.cs`: the new command and a branch in `AppCommands.FormatOf`.
+3. `MainWindow.xaml`: a `CommandBinding` (use `Format_Executed` and `CanFormat_CanExecute`), a button in the `ToolBar` (the block visible
+   while the editor is shown), and a menu item under Edit > Format. Headings use `CommandParameter` as the level.
+4. Tests: `MarkdownEditingInlineTests/LineTests/LinkTests` (no UI, plain `TextDocument`) and `MarkdownEditingApplyTests`
+   (`TextEditor` on `WpfHost`). README (features and shortcuts).
 
-## 6. Checklist PR
+## 6. PR checklist
 
-- [ ] `dotnet build Makdon.sln` -> **0 warning, 0 error**.
-- [ ] `dotnet test src/Makdon.Tests` -> semua hijau (jalankan sungguhan; jangan menyatakan hijau tanpa menjalankan).
-- [ ] Test baru untuk perilaku baru: jalur normal, edge case, error path. Tidak menyentuh `%APPDATA%`/registri/`crash.log` asli.
-- [ ] Perubahan tema: kunci Light = Dark (periksa dengan perintah di atas); `DynamicResource` bukan `StaticResource`.
-- [ ] Alur yang menulis file memakai `TextFileIO.Write`; yang membuka dokumen memakai `MainWindow.OpenFile`.
-- [ ] Ekspor/pratinjau: tidak menyatukan pipeline; URL baru lewat `ClassifyUrl`; lihat [SECURITY.md](SECURITY.md).
-- [ ] Cetak/Pratinjau Cetak: tidak ada path lokal atau dokumen galat di kertas; test cetak tanpa printer fisik/dialog sungguhan (aturan 8-9 di 4.2).
-- [ ] Teks UI/pesan/komentar bahasa Indonesia, identifier bahasa Inggris; komentar menjelaskan *mengapa*.
-- [ ] Tidak ada fitur di luar permintaan; temuan lain dilaporkan terpisah.
-- [ ] Dokumentasi diperbarui bila perilaku berubah: [../README.md](../README.md) (fitur, pintasan, batasan), [../CLAUDE.md](../CLAUDE.md)
-  (bila aturan/struktur berubah), dokumen di `docs/`, dan [../CHANGELOG.md](../CHANGELOG.md).
-- [ ] Perubahan identitas (`AppId`, nama mutex `Makdon.AppMutex`, tabel registri DISTRIBUTION 4.1, switch XPS) diubah serentak di semua tempat yang tercantum di CLAUDE.md. Perubahan installer atau skrip registri diuji dengan `-WhatIf` atau di VM.
-- [ ] Tidak ada commit/push otomatis; commit hanya bila diminta.
+- [ ] `dotnet build Makdon.sln` -> **0 warnings, 0 errors**.
+- [ ] `dotnet test src/Makdon.Tests` -> all green (run it for real; do not claim green without running).
+- [ ] New tests for new behavior: normal path, edge cases, error paths. Do not touch the real `%APPDATA%`/registry/`crash.log`.
+- [ ] Theme changes: Light keys = Dark keys (check with the command above); `DynamicResource`, not `StaticResource`.
+- [ ] Flows that write files use `TextFileIO.Write`; flows that open documents use `MainWindow.OpenFile`.
+- [ ] Export/preview: pipelines are not merged; new URLs go through `ClassifyUrl`; see [SECURITY.md](SECURITY.md).
+- [ ] Print/Print Preview: no local paths or error documents on paper; print tests without a physical printer or real dialog (rules 8-9 in 4.2).
+- [ ] UI text/messages/comments in Indonesian, identifiers in English; comments explain *why*.
+- [ ] No features beyond the request; other findings are reported separately.
+- [ ] Documentation updated when behavior changes: [../README.md](../README.md) (features, shortcuts, limitations) and `README.id.md` (updated together with `README.md`), [../CLAUDE.md](../CLAUDE.md)
+  (when rules/structure change), documents in `docs/`, and [../CHANGELOG.md](../CHANGELOG.md).
+- [ ] Identity changes (`AppId`, mutex name `Makdon.AppMutex`, registry table DISTRIBUTION 4.1, XPS switch) are changed together everywhere listed in CLAUDE.md. Changes to the installer or registry scripts are tested with `-WhatIf` or in a VM.
+- [ ] No automatic commit/push; commit only when asked.
 
-## 7. Larangan (dari CLAUDE.md)
+## 7. Prohibitions (from CLAUDE.md)
 
-- Jangan menulis file dokumen langsung; semua lewat `TextFileIO.Write` (atomik, mempertahankan encoding/BOM).
-- Jangan menyatukan `MarkdownSupport.Pipeline` (pratinjau) dengan `ExportPipeline` + `SanitizeForExport` (ekspor HTML wajib: HTML
-  mentah di-escape, URL disaring).
-- Jangan melonggarkan pemblokiran gambar di pratinjau/cetak (`ResolveImageUrls`): hanya file lokal dan `http(s)` yang boleh sampai ke
-  WPF; UNC, `ftp:`, skema lain, dan `data:` diganti penanda; `http(s)` mengikuti opsi blokir remote.
-- Jangan menyematkan gambar lokal di ekspor dari luar folder dokumen; hormati 2 MB per gambar dan anggaran 30 MB; jangan menghapus
-  penanganan OOM/galat di `ExportHtml_Executed`.
-- Jangan membuat dokumen cetak yang memuat path lokal atau dokumen galat (`CreateErrorDocument`); jalur cetak/pratinjau cetak melempar
-  (`throwOnFailure: true`). Jangan mencetak dari tempat lain selain `PrintService`/`PrintPreviewWindow`: ukuran halaman hanya diturunkan oleh
-  `PageLayout.Apply`, kaki halaman oleh `HeaderFooterPaginator`.
-- Jangan menutup paket XPS pratinjau (`PreviewBuild.Cleanup`) secara sinkron dari `Dispose`: tunggu penulis berhenti dan dispatcher idle.
-- Jangan membuka dokumen selain lewat `MainWindow.OpenFile` (cek ukuran, OOM, tab ganda).
-- Jangan menampilkan `MessageBox`/dialog konflik langsung dari event; pakai `ChoiceDialog` dan serialisasi `conflictPromptOpen`/
-  `conflictQueue`. `DocumentTab.SaveTo` menunda pemeriksaan eksternal selama berjalan; pertahankan.
-- Jangan membuat instance dengan argumen menimpa sesi tersimpan sebelum pengguna membuka tab lagi (`OpenUserFile`).
-- Jangan menambah fitur di luar permintaan; build tidak boleh menghasilkan warning.
-- Test tidak boleh menyentuh `%APPDATA%`/registri/`crash.log` pengguna; pakai scope unik pada `SingleInstance.Create(scope)`.
-- **Jangan menjalankan skrip registri sungguhan** (`register/unregister-file-association.ps1`) tanpa `-WhatIf` lebih dulu; skrip ini
-  menulis ke HKCU.
-- Jangan mengubah `AppId` installer atau nama mutex `Makdon.AppMutex`, dan jangan menghapus switch `DisableXpsPackageBoundaryRestriction` ([ADR-31](DESIGN-DECISIONS.md#adr-31-mutex-installer-bernama-tetap-makdonappmutex-bukan-restart-manager), [ADR-32](DESIGN-DECISIONS.md#adr-32-net-10-dan-switch-xps-di-runtimeconfig)).
-- Jangan memindahkan data portable diam-diam ke `%APPDATA%`, dan jangan menaruh penanda `Makdon.portable` di bahan installer atau folder rilis ([ADR-28](DESIGN-DECISIONS.md#adr-28-mode-portable-lewat-penanda-makdonportable-data-di-data)).
-- Jangan menulis registri dari kode di luar `FileAssociation`/`IRegistryStore`.
-- Jangan commit atau push kecuali diminta.
+- Do not write document files directly; everything goes through `TextFileIO.Write` (atomic, keeps encoding/BOM).
+- Do not merge `MarkdownSupport.Pipeline` (preview) with `ExportPipeline` + `SanitizeForExport` (HTML export must escape raw HTML and filter URLs).
+- Do not loosen the image blocking in preview/print (`ResolveImageUrls`): only local files and `http(s)` may reach WPF; UNC, `ftp:`, other schemes, and `data:` are replaced with markers; `http(s)` follows the remote-blocking option.
+- Do not embed local images in the export from outside the document folder; respect the 2 MB per image limit and the 30 MB budget; do not remove the OOM/error handling in `ExportHtml_Executed`.
+- Do not create print documents that contain local paths or error documents (`CreateErrorDocument`); the print/Print Preview path throws (`throwOnFailure: true`). Do not print from anywhere other than `PrintService`/`PrintPreviewWindow`: the page size is set only by `PageLayout.Apply`, and the page footer only by `HeaderFooterPaginator`.
+- Do not close the preview XPS package (`PreviewBuild.Cleanup`) synchronously from `Dispose`: wait for the writer to stop and the dispatcher to become idle.
+- Do not open documents except through `MainWindow.OpenFile` (size check, OOM, duplicate tabs).
+- Do not show `MessageBox`/conflict dialogs directly from an event; use `ChoiceDialog` and serialize through `conflictPromptOpen`/`conflictQueue`. `DocumentTab.SaveTo` postpones external checks while it runs; keep that.
+- Do not let an instance started with arguments overwrite the saved session before the user opens a tab again (`OpenUserFile`).
+- Do not add features beyond the request; the build must not produce warnings.
+- Tests must not touch the user's `%APPDATA%`/registry/`crash.log`; use a unique scope with `SingleInstance.Create(scope)`.
+- **Do not run real registry scripts** (`register/unregister-file-association.ps1`) without `-WhatIf` first; these scripts write to HKCU.
+- Do not change the installer `AppId` or the mutex name `Makdon.AppMutex`, and do not remove the `DisableXpsPackageBoundaryRestriction` switch ([ADR-31](DESIGN-DECISIONS.md#adr-31-fixed-installer-mutex-name-makdonappmutex-not-restart-manager), [ADR-32](DESIGN-DECISIONS.md#adr-32-net-10-and-xps-switch-in-runtimeconfig)).
+- Do not silently move portable data to `%APPDATA%`, and do not put the `Makdon.portable` marker in installer materials or the release folder ([ADR-28](DESIGN-DECISIONS.md#adr-28-portable-mode-via-makdonportable-marker-data-in-data)).
+- Do not write to the registry from code outside `FileAssociation`/`IRegistryStore`.
+- Do not commit or push unless asked.
 
-## 8. Sub-agent proyek (`.claude/agents/`)
+## 8. Project sub-agents (`.claude/agents/`)
 
-Empat sub-agent terdaftar di repo (berkas `.md` dengan frontmatter `name`, `description`, `tools`, `model`). Sumber kebenarannya adalah
-isi folder itu, bukan daftar agen di klien; jika agen tidak muncul di daftar, periksa foldernya.
+Four sub-agents are registered in the repo (`.md` files with frontmatter `name`, `description`, `tools`, `model`). The source of truth is the contents of that folder, not the list of agents in the client; if an agent does not appear in the list, check the folder.
 
-| Agen | Model | Alat | Kapan dipakai | Batasan penting |
+| Agent | Model | Tools | When to use | Important constraints |
 | --- | --- | --- | --- | --- |
-| `kuli` | sonnet | Read, Edit, Write, Glob, Grep, Bash | Implementasi fitur atau perbaikan bug yang spesifikasinya sudah jelas, setelah rencana disetujui; perubahan terfokus | Baca kode sekitar dulu; batasi pada yang diminta (masalah lain dilaporkan); jalankan build/test sebelum selesai; jangan commit/push/hapus file |
-| `tyas` | sonnet | Read, Edit, Glob, Grep, Bash | Menyelidiki error, test gagal, atau perilaku tak terduga (ada stack trace, test merah, penyebab belum diketahui) | Cari akar masalah, bukan gejala: reproduksi -> hipotesis -> perbaikan minimal -> jalankan ulang; tandai bagian yang masih dugaan |
-| `kurang-kerjaan` | sonnet | Read, Edit, Write, Glob, Grep, Bash | Menulis/memperbaiki test untuk kode yang ada atau baru berubah | Ikuti pola test proyek; jalankan test yang ditulis; **tidak mengubah kode produksi** (bug dilaporkan) |
-| `pak-bos` | opus | Read, Glob, Grep, Bash | Review diff/perubahan secara proaktif setelah implementasi: korektness, regresi, celah test, keamanan dasar | Hanya baca (tidak punya Edit/Write); temuan berurut keparahan dengan `file:baris`, skenario gagal, dan saran; tanpa komentar gaya yang tidak melanggar konvensi |
+| `kuli` | sonnet | Read, Edit, Write, Glob, Grep, Bash | Implementing a feature or fixing a bug whose spec is already clear, after the plan is approved; focused changes | Read the surrounding code first; limit to what was asked (other issues are reported); run build/test before finishing; do not commit/push/delete files |
+| `tyas` | sonnet | Read, Edit, Glob, Grep, Bash | Investigating errors, failing tests, or unexpected behavior (a stack trace exists, a test is red, the cause is unknown) | Find the root cause, not the symptom: reproduce -> hypothesis -> minimal fix -> rerun; mark the parts that are still assumptions |
+| `kurang-kerjaan` | sonnet | Read, Edit, Write, Glob, Grep, Bash | Writing/fixing tests for existing or newly changed code | Follow the project's test patterns; run the tests you write; **does not change production code** (bugs are reported) |
+| `pak-bos` | opus | Read, Glob, Grep, Bash | Proactively reviewing diffs/changes after implementation: correctness, regressions, test gaps, basic security | Read-only (no Edit/Write); findings ordered by severity with `file:line`, failure scenario, and suggestion; no style comments that do not violate conventions |
 
-Alur yang masuk akal (saran, bukan aturan repo): `kuli` mengimplementasikan -> `kurang-kerjaan` menambah test -> `pak-bos` me-review
-`git diff`; bila ada test merah atau galat yang belum dipahami, `tyas` menyelidiki. Setiap agen melaporkan hasil verifikasi apa adanya,
-termasuk kegagalan.
+A reasonable flow (a suggestion, not a repo rule): `kuli` implements -> `kurang-kerjaan` adds tests -> `pak-bos` reviews the
+`git diff`; if there is a red test or an error that is not understood, `tyas` investigates. Each agent reports its verification results as they are, including failures.
 
-## 9. Membuat rilis
+## 9. Making a release
 
-Rilis dipicu push ke branch `build`; rancangan lengkapnya di [DISTRIBUTION.md](DISTRIBUTION.md) §8. Versi diambil dari `<Version>`, tag `v<versi>`
-dibuat otomatis, dan run gagal bila versi itu sudah pernah dirilis.
+A release is triggered by a push to the `build` branch; the full design is in [DISTRIBUTION.md](DISTRIBUTION.md) §8. The version is taken from `<Version>`, the `v<versi>` tag
+is created automatically, and the run fails if that version has already been released.
 
-1. Naikkan `<Version>` di `src/Makdon/Makdon.csproj` (satu sumber; skrip dan CI membacanya) dan pindahkan entri `[Unreleased]` di
-   [../CHANGELOG.md](../CHANGELOG.md) ke versi dan tanggal baru.
-2. Bangun lokal dengan `powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1`. Skrip ini build (0 warning), test, publish profil
-   `win-x64`, menyusun isi rilis, membangun installer, membuat zip portable, lalu `SHA256SUMS.txt`. Setiap run menghapus `artifacts\<versi>\` lebih dulu.
-   - Tanpa Inno Setup 6 terpasang, installer dilewati dengan peringatan. Pakai `-IsccPath` untuk lokasi `ISCC.exe`, `-RequireInstaller` untuk gagal bila installer tidak jadi.
-   - `-SkipTests` hanya untuk percobaan cepat, jangan dipakai untuk rilis.
-   - `-VerifyInstallerContents` memasang installer ke folder sementara lalu mencopotnya, dan menulis HKCU sementara. Skrip menolaknya di luar CI (`GITHUB_ACTIONS=true`) kecuali dengan `-Force`, dan menolak bila kunci uninstall Makdon sudah ada (`scripts/build-release.ps1:174-188`).
-3. Keluaran di `artifacts\<versi>\`: `Makdon-<versi>-setup-x64.exe`, `Makdon-<versi>-portable-x64.zip`, `SHA256SUMS.txt`.
-4. Uji installer dan zip dengan checklist "Distribusi" di [TESTING.md](TESTING.md#checklist-uji-manual-sebelum-rilis).
-5. Commit perubahan versi dan CHANGELOG (hanya bila diminta), lalu push commit itu ke branch `build` (mis. `git push origin main:build`). Workflow
-   `release.yml` membuat tag `v<versi>` pada commit tersebut, membuat draft rilis, mengunggah tiga aset, dan mempublikasikannya. Rilis yang sudah terbit tidak boleh diganti (immutable releases, **belum diverifikasi**
-   di repo); bila salah, terbitkan versi baru.
+1. Raise `<Version>` in `src/Makdon/Makdon.csproj` (single source; the script and CI read it) and move the `[Unreleased]` entry in
+   [../CHANGELOG.md](../CHANGELOG.md) to the new version and date.
+2. Build locally with `powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1`. The script builds (0 warnings), tests, publishes the
+   `win-x64` profile, assembles the release contents, builds the installer, creates the portable zip, and then `SHA256SUMS.txt`. Each run deletes `artifacts\<versi>\` first.
+   - Without Inno Setup 6 installed, the installer is skipped with a warning. Use `-IsccPath` for the location of `ISCC.exe`, and `-RequireInstaller` to fail if the installer is not produced.
+   - `-SkipTests` is only for quick trials; do not use it for a release.
+   - `-VerifyInstallerContents` installs the installer into a temporary folder and uninstalls it, and writes a temporary HKCU entry. Outside CI (`GITHUB_ACTIONS=true`) the script refuses it unless `-Force` is given, and it refuses if the Makdon uninstall key already exists (`scripts/build-release.ps1:174-188`).
+3. Output in `artifacts\<versi>\`: `Makdon-<versi>-setup-x64.exe`, `Makdon-<versi>-portable-x64.zip`, `SHA256SUMS.txt`.
+4. Test the installer and zip with the "Distribution" checklist in [TESTING.md](TESTING.md#pre-release-manual-test-checklist).
+5. Commit the version and CHANGELOG changes (only if asked), then push that commit to the `build` branch (e.g. `git push origin main:build`). The
+   `release.yml` workflow creates the `v<versi>` tag on that commit, creates a draft release, uploads the three assets, and publishes them. A published release must not be replaced (immutable releases, **not verified** in the repo); if something is wrong, publish a new version.
